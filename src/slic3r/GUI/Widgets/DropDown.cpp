@@ -191,6 +191,8 @@ void DropDown::paintNow()
 
 static wxSize GetBmpSize(wxBitmap & bmp)
 {
+    if (!bmp.IsOk())
+        return wxSize(0, 0);
 #ifdef __APPLE__
     return bmp.GetScaledSize();
 #else
@@ -389,7 +391,7 @@ void DropDown::render(wxDC &dc)
         }
         auto text = group.IsEmpty()
                         ? (item.group.IsEmpty() ? item.text : item.group)
-                        : (item.text.StartsWith(group) ? item.text.substr(group.size()).Trim(false) : item.text);
+                        : (item.text.StartsWith(group) && !group.EndsWith(' ') ? item.text.substr(group.size()).Trim(false) : item.text);
         if (!text_off && !text.IsEmpty()) {
             wxSize tSize = dc.GetMultiLineTextExtent(text);
             if (pt.x + tSize.x > rcContent.GetRight()) {
@@ -405,7 +407,7 @@ void DropDown::render(wxDC &dc)
             if (group.IsEmpty() && !item.group.IsEmpty()) {
                 auto szBmp = arrow_bitmap.GetBmpSize();
                 pt.x = rcContent.GetRight() - szBmp.x - 5;
-                pt.y = rcContent.y += (rcContent.height - szBmp.y) / 2;
+                pt.y = rcContent.y + (rcContent.height - szBmp.y) / 2;
                 dc.DrawBitmap(arrow_bitmap.bmp(), pt);
             }
         }
@@ -501,7 +503,7 @@ void DropDown::messureSize()
         if (!text_off) {
             auto text = group.IsEmpty()
                         ? (item.group.IsEmpty() ? item.text : item.group)
-                        : (item.text.StartsWith(group) ? item.text.substr(group.size()).Trim(false) : item.text);
+                        : (item.text.StartsWith(group) && !group.EndsWith(' ') ? item.text.substr(group.size()).Trim(false) : item.text);
             size1 = dc.GetMultiLineTextExtent(text);
             if (group.IsEmpty() && !item.group.IsEmpty())
                 size1.x += 5 + arrow_bitmap.GetBmpWidth();

@@ -1301,6 +1301,7 @@ void NotificationManager::UpdatedItemsInfoNotification::add_type(InfoItemType ty
 		// BBS
 		//case InfoItemType::CustomSeam:          text += format(("%1$d Object has custom seam.",			"%1$d Objects have custom seam.",			(*it).second), (*it).second) + "\n"; break;
 		case InfoItemType::MmuSegmentation:     text += format(_L_PLURAL("%1$d Object has color painting.",			"%1$d Objects have color painting.",(*it).second), (*it).second) + "\n"; break;
+        case InfoItemType::FuzzySkin:           text += format(_L_PLURAL("%1$d Object has fuzzy skin.", "%1$d Objects have fuzzy skin.", (*it).second), (*it).second) + "\n"; break;
 		// BBS
 		//case InfoItemType::Sinking:             text += format(("%1$d Object has partial sinking.",		"%1$d Objects have partial sinking.",		(*it).second), (*it).second) + "\n"; break;
 		case InfoItemType::CutConnectors:       text += format(_L_PLURAL("%1$d object was loaded as a part of cut object.",		"%1$d objects were loaded as parts of cut object", (*it).second), (*it).second) + "\n"; break;
@@ -1690,6 +1691,14 @@ void NotificationManager::push_slicing_error_notification(const std::string &tex
 	push_notification_data({ NotificationType::SlicingError, NotificationLevel::ErrorNotificationLevel, 0,  _u8L("Error:") + "\n" + text, link, callback }, 0);
 	set_slicing_progress_hidden();
 }
+
+void NotificationManager::push_helio_error_notification(const std::string &text)
+{
+    set_all_slicing_errors_gray(false);
+    push_notification_data({NotificationType::HelioSlicingError, NotificationLevel::ErrorNotificationLevel, 0, _u8L("Error:") + "\n" + text, ""}, 0);
+    set_slicing_progress_hidden();
+}
+
 void NotificationManager::push_slicing_warning_notification(const std::string& text, bool gray, ModelObject const * obj, ObjectID oid, int warning_step, int warning_msg_id, NotificationLevel level/* = NotificationLevel::WarningNotificationLevel*/)
 {
 	std::function<bool(wxEvtHandler*)> callback;

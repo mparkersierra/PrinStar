@@ -100,7 +100,7 @@ AMSControl::AMSControl(wxWindow *parent, wxWindowID id, const wxPoint &pos, cons
     m_panel_down_road->SetBackgroundColour(AMS_CONTROL_DEF_BLOCK_BK_COLOUR);
 
     m_down_road = new AMSRoadDownPart(m_panel_down_road, wxID_ANY, wxDefaultPosition, AMS_DOWN_ROAD_SIZE);
-    m_sizer_down_road->Add(m_panel_down_road, 0, wxALIGN_CENTER_HORIZONTAL | wxTOP, 0);
+    m_sizer_down_road->Add(m_panel_down_road, 0, wxTOP, 0);
 
     // ams mode
     //
@@ -186,6 +186,7 @@ AMSControl::AMSControl(wxWindow *parent, wxWindowID id, const wxPoint &pos, cons
     m_button_extruder_feed->SetTextColor(btn_text_green);
     m_button_extruder_feed->SetMinSize(wxSize(FromDIP(80),FromDIP(34)));
     m_button_extruder_feed->SetMaxSize(wxSize(FromDIP(80),FromDIP(34)));
+    m_button_extruder_feed->EnableTooltipEvenDisabled();
 
 
     if (wxGetApp().app_config->get("language") == "de_DE") m_button_extruder_feed->SetFont(Label::Body_9);
@@ -206,6 +207,7 @@ AMSControl::AMSControl(wxWindow *parent, wxWindowID id, const wxPoint &pos, cons
     m_button_extruder_back->SetFont(Label::Body_13);
     m_button_extruder_back->SetMinSize(wxSize(FromDIP(80), FromDIP(34)));
     m_button_extruder_back->SetMaxSize(wxSize(FromDIP(80), FromDIP(34)));
+    m_button_extruder_back->EnableTooltipEvenDisabled();
 
     if (wxGetApp().app_config->get("language") == "de_DE") m_button_extruder_back->SetFont(Label::Body_9);
     if (wxGetApp().app_config->get("language") == "fr_FR") m_button_extruder_back->SetFont(Label::Body_9);
@@ -226,11 +228,11 @@ AMSControl::AMSControl(wxWindow *parent, wxWindowID id, const wxPoint &pos, cons
     m_panel_option_left->Layout();
     m_panel_option_right->Layout();
 
-    m_sizer_ams_option->Add(m_panel_option_left, 0, wxALIGN_LEFT, 0);
+    m_sizer_ams_option->Add(m_panel_option_left, 0, wxALIGN_TOP, 0);
     m_sizer_ams_option->Add( 0, 0, 1, wxEXPAND, 0);
-    m_sizer_ams_option->Add(m_sizer_option_mid, 0, wxALIGN_RIGHT, 0);
+    m_sizer_ams_option->Add(m_sizer_option_mid, 0, wxALIGN_TOP, 0);
     m_sizer_ams_option->Add( 0, 0, 1, wxEXPAND, 0);
-    m_sizer_ams_option->Add(m_panel_option_right, 0, wxALIGN_RIGHT, 0);
+    m_sizer_ams_option->Add(m_panel_option_right, 0, wxALIGN_TOP, 0);
 
 
     m_sizer_ams_body->Add(m_sizer_ams_area_left, wxALIGN_CENTER, 0);
@@ -278,16 +280,7 @@ AMSControl::AMSControl(wxWindow *parent, wxWindowID id, const wxPoint &pos, cons
         uiAmsHumidityInfo *info    = (uiAmsHumidityInfo *) evt.GetClientData();
         if (info)
         {
-            if (info->humidity_percent >= 0)
-            {
-                m_percent_humidity_dry_popup->Update(info);
-
-                wxPoint img_pos = ClientToScreen(wxPoint(0, 0));
-                wxPoint popup_pos(img_pos.x - m_percent_humidity_dry_popup->GetSize().GetWidth() + FromDIP(150), img_pos.y - FromDIP(80));
-                m_percent_humidity_dry_popup->Move(popup_pos);
-                m_percent_humidity_dry_popup->ShowModal();
-            }
-            else
+            if (info->ams_type == AMSModel::GENERIC_AMS)
             {
                 wxPoint img_pos = ClientToScreen(wxPoint(0, 0));
                 wxPoint popup_pos(img_pos.x - m_Humidity_tip_popup.GetSize().GetWidth() + FromDIP(150), img_pos.y - FromDIP(80));
@@ -296,6 +289,15 @@ AMSControl::AMSControl(wxWindow *parent, wxWindowID id, const wxPoint &pos, cons
                 int humidity_value = info->humidity_level;
                 if (humidity_value > 0 && humidity_value <= 5) { m_Humidity_tip_popup.set_humidity_level(humidity_value); }
                 m_Humidity_tip_popup.Popup();
+            }
+            else
+            {
+                m_percent_humidity_dry_popup->Update(info);
+
+                wxPoint img_pos = ClientToScreen(wxPoint(0, 0));
+                wxPoint popup_pos(img_pos.x - m_percent_humidity_dry_popup->GetSize().GetWidth() + FromDIP(150), img_pos.y - FromDIP(80));
+                m_percent_humidity_dry_popup->Move(popup_pos);
+                m_percent_humidity_dry_popup->ShowModal();
             }
         }
 
@@ -406,13 +408,22 @@ wxColour AMSControl::GetCanColour(std::string amsid, std::string canid)
     return col;
 }
 
-void AMSControl::SetActionState(bool button_status[])
+void AMSControl::EnableLoadFilamentBtn(bool enable, const std::string& ams_id, const std::string& can_id,const wxString& tips)
 {
-    if (button_status[ActionButton::ACTION_BTN_LOAD]) m_button_extruder_feed->Enable();
-    else m_button_extruder_feed->Disable();
+    m_button_extruder_feed->Enable(enable);
+    if (m_button_extruder_feed->GetToolTipText() != tips) {
+        BOOST_LOG_TRIVIAL(info) << "ams_id=" << ams_id << ", can_id=" << can_id << "  Set Load Filament Button ToolTip : " << tips.ToUTF8();
+        m_button_extruder_feed->SetToolTip(tips);
+    }
+}
 
-    if (button_status[ActionButton::ACTION_BTN_UNLOAD]) m_button_extruder_back->Enable();
-    else m_button_extruder_back->Disable();
+void AMSControl::EnableUnLoadFilamentBtn(bool enable, const std::string& ams_id, const std::string& can_id,const wxString& tips)
+{
+    m_button_extruder_back->Enable(enable);
+    if (m_button_extruder_back->GetToolTipText() != tips) {
+        BOOST_LOG_TRIVIAL(info) << "ams_id=" << ams_id << ", can_id=" << can_id << "  Set Unload Filament Button ToolTip : " << tips.ToUTF8();
+        m_button_extruder_back->SetToolTip(tips);
+    }
 }
 
 void AMSControl::EnterNoneAMSMode()
@@ -520,6 +531,8 @@ void AMSControl::msw_rescale()
     if (m_percent_humidity_dry_popup){
         m_percent_humidity_dry_popup->msw_rescale();
     }
+
+    m_Humidity_tip_popup.msw_rescale();
 
     Layout();
     Refresh();

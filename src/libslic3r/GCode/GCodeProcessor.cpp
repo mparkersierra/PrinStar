@@ -334,10 +334,11 @@ static void planner_forward_pass_kernel(GCodeProcessor::TimeBlock& prev, GCodePr
     // full speed change within the block, we need to adjust the entry speed accordingly. Entry
     // speeds have already been reset, maximized, and reverse planned by reverse planner.
     // If nominal length is true, max junction speed is guaranteed to be reached. No need to recheck.
+
+    // 如果前一个block不能完成加速，那么要根据其加速到的速度，重新计算当前block的entry速度
     if (!prev.flags.nominal_length) {
         if (prev.feedrate_profile.entry < curr.feedrate_profile.entry) {
             float entry_speed = std::min(curr.feedrate_profile.entry, max_allowable_speed(-prev.acceleration, prev.feedrate_profile.entry, prev.distance));
-
             // Check for junction speed change
             if (curr.feedrate_profile.entry != entry_speed) {
                 curr.feedrate_profile.entry = entry_speed;
@@ -379,7 +380,7 @@ static void recalculate_trapezoids(std::vector<GCodeProcessor::TimeBlock>& block
             // Recalculate if current block entry or exit junction speed has changed.
             if (curr->flags.recalculate || next->flags.recalculate) {
                 // NOTE: Entry and exit factors always > 0 by all previous logic operations.
-                GCodeProcessor::TimeBlock block = *curr;
+                GCodeProcessor::TimeBlock& block = *curr;
                 block.feedrate_profile.exit = next->feedrate_profile.entry;
                 block.calculate_trapezoid();
                 curr->trapezoid = block.trapezoid;
@@ -390,7 +391,7 @@ static void recalculate_trapezoids(std::vector<GCodeProcessor::TimeBlock>& block
 
     // Last/newest block in buffer. Always recalculated.
     if (next != nullptr) {
-        GCodeProcessor::TimeBlock block = *next;
+        GCodeProcessor::TimeBlock& block = *next;
         block.feedrate_profile.exit = next->safe_feedrate;
         block.calculate_trapezoid();
         next->trapezoid = block.trapezoid;
@@ -534,7 +535,8 @@ void GCodeProcessor::TimeProcessor::post_process(const std::string& filename, st
     if (in.f == nullptr)
         throw Slic3r::RuntimeError(std::string("Time estimator post process export failed.\nCannot open file for reading.\n"));
 
-    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  before process %1%") % filename.c_str();
+    std::string filename_safe = PathSanitizer::sanitize(filename);
+    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  before process %1%") % filename_safe;
     // temporary file to contain modified gcode
     std::string filename_in = filename;
     std::string filename_out = filename + ".postprocess";
@@ -1147,6 +1149,8 @@ void GCodeProcessor::TimeProcessor::post_process(const std::string& filename, st
 
     filename_in = filename_out; // filename_out is opened in read|write mode. During second process ,we ues filename_out as input
     filename_out = filename + ".postprocessed";
+    std::string filename_in_safe = PathSanitizer::sanitize(filename_in);
+    std::string filename_out_safe = PathSanitizer::sanitize(filename_out);
 
     FilePtr new_out = boost::nowide::fopen(filename_out.c_str(), "wb");
     std::fseek(out.f, 0, SEEK_SET); // move to start of the file and start reading gcode as in
@@ -1160,17 +1164,17 @@ void GCodeProcessor::TimeProcessor::post_process(const std::string& filename, st
     in.close();
     out.close();
 
-    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  after process %1%") % filename.c_str();
+    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  after process %1%") % filename_safe;
 
     if (boost::nowide::remove(filename_in.c_str()) != 0) {
-        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  Failed to remove the temporary G-code file %1%") % filename_in.c_str();
-        throw Slic3r::RuntimeError(std::string("Failed to remove the temporary G-code file ") + filename_in + '\n' +
-            "Is " + filename_in + " locked?" + '\n');
+        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  Failed to remove the temporary G-code file %1%") % filename_in_safe;
+        throw Slic3r::RuntimeError(std::string("Failed to remove the temporary G-code file ") + filename_in_safe + '\n' +
+            "Is " + filename_in_safe + " locked?" + '\n');
     }
     if (rename_file(filename_out, filename)) {
-        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  Failed to rename the output G-code file from %1% to %2%") % filename_out.c_str() % filename.c_str();
-        throw Slic3r::RuntimeError(std::string("Failed to rename the output G-code file from ") + filename_out + " to " + filename + '\n' +
-            "Is " + filename_out + " locked?" + '\n');
+        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(":  Failed to rename the output G-code file from %1% to %2%") % filename_out_safe % filename_safe;
+        throw Slic3r::RuntimeError(std::string("Failed to rename the output G-code file from ") + filename_out_safe + " to " + filename_safe + '\n' +
+            "Is " + filename_out_safe + " locked?" + '\n');
     }
 }
 
@@ -1601,7 +1605,9 @@ void GCodeProcessor::register_commands()
 
         {"VG1", [this](const GCodeReader::GCodeLine& line) { process_VG1(line); }},
         {"VM104", [this](const GCodeReader::GCodeLine& line) { process_VM104(line); }},
-        {"VM109", [this](const GCodeReader::GCodeLine& line) { process_VM109(line); }}
+        {"VM109", [this](const GCodeReader::GCodeLine& line) { process_VM109(line); }},
+        {"M622", [this](const GCodeReader::GCodeLine& line) { process_M622(line);}},
+        {"M623", [this](const GCodeReader::GCodeLine& line) { process_M623(line);}}
     };
 
     std::unordered_set<std::string>early_quit_commands = {
@@ -1788,6 +1794,7 @@ void GCodeProcessor::apply_config(const PrintConfig& config)
     m_time_processor.filament_load_times = static_cast<float>(config.machine_load_filament_time.value);
     m_time_processor.filament_unload_times = static_cast<float>(config.machine_unload_filament_time.value);
     m_time_processor.extruder_change_times = static_cast<float>(config.machine_switch_extruder_time.value);
+    m_time_processor.prepare_compensation_time = static_cast<float>(config.machine_prepare_compensation_time.value);
 
     for (size_t i = 0; i < static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Count); ++i) {
         float max_acceleration = get_option_value(m_time_processor.machine_limits.machine_max_acceleration_extruding, i);
@@ -2051,6 +2058,10 @@ void GCodeProcessor::apply_config(const DynamicPrintConfig& config)
     if (machine_switch_extruder_time != nullptr)
         m_time_processor.extruder_change_times = static_cast<float>(machine_switch_extruder_time->value);
 
+    const ConfigOptionFloat* machine_prepare_compensation_time = config.option<ConfigOptionFloat>("machine_prepare_compensation_time");
+    if (machine_prepare_compensation_time != nullptr)
+        m_time_processor.prepare_compensation_time = static_cast<float>(machine_prepare_compensation_time->value);
+
     if (m_flavor == gcfMarlinLegacy || m_flavor == gcfMarlinFirmware || m_flavor == gcfKlipper) {
         const ConfigOptionFloatsNullable* machine_max_acceleration_x = config.option<ConfigOptionFloatsNullable>("machine_max_acceleration_x");
         if (machine_max_acceleration_x != nullptr)
@@ -2092,7 +2103,7 @@ void GCodeProcessor::apply_config(const DynamicPrintConfig& config)
         if (machine_max_jerk_y != nullptr)
             m_time_processor.machine_limits.machine_max_jerk_y.values = machine_max_jerk_y->values;
 
-        const ConfigOptionFloatsNullable* machine_max_jerk_z = config.option<ConfigOptionFloatsNullable>("machine_max_jerkz");
+        const ConfigOptionFloatsNullable* machine_max_jerk_z = config.option<ConfigOptionFloatsNullable>("machine_max_jerk_z");
         if (machine_max_jerk_z != nullptr)
             m_time_processor.machine_limits.machine_max_jerk_z.values = machine_max_jerk_z->values;
 
@@ -2226,6 +2237,7 @@ void GCodeProcessor::reset()
     m_enable_pre_heating = false;
     m_hotend_cooling_rate = m_hotend_heating_rate = { 2.f };
 
+    m_thermal_index    = ThermalIndex(0.0, 0.0, 0.0);
     m_highest_bed_temp = 0;
 
     m_extruded_last_z = 0.0f;
@@ -2266,6 +2278,16 @@ static inline const char* skip_whitespaces(const char *begin, const char *end) {
 static inline const char* remove_eols(const char *begin, const char *end) {
     for (; begin != end && (*(end - 1) == '\r' || *(end - 1) == '\n'); -- end);
     return end;
+}
+
+DynamicConfig GCodeProcessor::export_config_for_render() const
+{
+    DynamicConfig config;
+    config.set_key_value("filament_colour", new ConfigOptionStrings(m_parser.get_config().filament_colour.values));
+    config.set_key_value("filament_is_support", new ConfigOptionBools(m_parser.get_config().filament_is_support.values));
+    config.set_key_value("filament_type", new ConfigOptionStrings(m_parser.get_config().filament_type.values));
+    config.set_key_value("filament_map", new ConfigOptionInts(m_parser.get_config().filament_map.values));
+    return config;
 }
 
 // Load a G-code into a stand-alone G-code viewer.
@@ -2669,6 +2691,13 @@ void GCodeProcessor::process_gcode_line(const GCodeReader::GCodeLine& line, bool
             }
         }
     }
+}
+
+// Processes the gcode comments added by the helio processing server and stores them
+void GCodeProcessor::process_helioadditive_comment(const GCodeReader::GCodeLine &line)
+{
+    const std::string &comment = line.raw();
+    m_thermal_index            = parse_helioadditive_comment(comment);
 }
 
 #if __has_include(<charconv>)
@@ -3611,6 +3640,8 @@ void GCodeProcessor::process_G0(const GCodeReader::GCodeLine& line)
 
 void GCodeProcessor::process_G1(const GCodeReader::GCodeLine& line)
 {
+    process_helioadditive_comment(line);
+
     int filament_id = get_filament_id();
     int last_filament_id = get_last_filament_id();
     float filament_diameter = (static_cast<size_t>(filament_id) < m_result.filament_diameters.size()) ? m_result.filament_diameters[filament_id] : m_result.filament_diameters.back();
@@ -3776,6 +3807,7 @@ void GCodeProcessor::process_G1(const GCodeReader::GCodeLine& line)
         TimeMachine::State& prev = machine.prev;
         std::vector<TimeBlock>& blocks = machine.blocks;
 
+        // m_feedrate 从gcode中解析获得，在保证最小速度限制的情况下赋给feedrate
         curr.feedrate = (delta_pos[E] == 0.0f) ?
             minimum_travel_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), m_feedrate) :
             minimum_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), m_feedrate);
@@ -3798,10 +3830,18 @@ void GCodeProcessor::process_G1(const GCodeReader::GCodeLine& line)
         block.layer_id = std::max<unsigned int>(1, m_layer_id);
         block.flags.prepare_stage = m_processing_start_custom_gcode;
 
+        // calculates block acceleration，计算当前block的最高能到达的加速度
+        float acceleration =
+            (type == EMoveType::Travel) ? get_travel_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i)) :
+            (is_extrusion_only_move(delta_pos) ?
+                get_retract_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i)) :
+                get_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i)));
+
         //BBS: limite the cruise according to centripetal acceleration
         //Only need to handle when both prev and curr segment has movement in x-y plane
         if ((prev.exit_direction(0) != 0.0f || prev.exit_direction(1) != 0.0f) &&
-            (curr.enter_direction(0) != 0.0f || curr.enter_direction(1) != 0.0f)) {
+            (curr.enter_direction(0) != 0.0f || curr.enter_direction(1) != 0.0f) &&
+            !is_extrusion_only_move(delta_pos)) {
             Vec3f v1 = prev.exit_direction;
             v1(2, 0) = 0.0f;
             v1.normalize();
@@ -3819,12 +3859,12 @@ void GCodeProcessor::process_G1(const GCodeReader::GCodeLine& line)
                 float angle = float(atan2(double(cross), double(dot)));
                 float sin_theta_2 = sqrt((1.0f - cos(angle)) * 0.5f);
                 float r = sqrt(sqr(delta_pos[X]) + sqr(delta_pos[Y])) * 0.5 / sin_theta_2;
-                float acc = get_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i));
-                curr.feedrate = std::min(curr.feedrate, sqrt(acc * r));
+                curr.feedrate = std::min(curr.feedrate, sqrt(acceleration * r));
             }
         }
 
         // calculates block cruise feedrate
+        // 刨除前后关系，单纯计算当前block最高能到达的速度
         float min_feedrate_factor = 1.0f;
         for (unsigned char a = X; a <= E; ++a) {
             curr.axis_feedrate[a] = curr.feedrate * delta_pos[a] * inv_distance;
@@ -3833,7 +3873,7 @@ void GCodeProcessor::process_G1(const GCodeReader::GCodeLine& line)
 
             curr.abs_axis_feedrate[a] = std::abs(curr.axis_feedrate[a]);
             if (curr.abs_axis_feedrate[a] != 0.0f) {
-                float axis_max_feedrate = get_axis_max_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), m_extruder_id);
+                float axis_max_feedrate = get_axis_max_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), get_extruder_id());
                 if (axis_max_feedrate != 0.0f) min_feedrate_factor = std::min<float>(min_feedrate_factor, axis_max_feedrate / curr.abs_axis_feedrate[a]);
             }
         }
@@ -3848,16 +3888,10 @@ void GCodeProcessor::process_G1(const GCodeReader::GCodeLine& line)
             }
         }
 
-        // calculates block acceleration
-        float acceleration =
-            (type == EMoveType::Travel) ? get_travel_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i)) :
-            (is_extrusion_only_move(delta_pos) ?
-                get_retract_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i)) :
-                get_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i)));
 
         //BBS
         for (unsigned char a = X; a <= E; ++a) {
-            float axis_max_acceleration = get_axis_max_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), m_extruder_id);
+            float axis_max_acceleration = get_axis_max_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), get_extruder_id());
             if (acceleration * std::abs(delta_pos[a]) * inv_distance > axis_max_acceleration)
                 acceleration = axis_max_acceleration / (std::abs(delta_pos[a]) * inv_distance);
         }
@@ -3880,75 +3914,36 @@ void GCodeProcessor::process_G1(const GCodeReader::GCodeLine& line)
         // calculates block entry feedrate
         float vmax_junction = curr.safe_feedrate;
         if (!blocks.empty() && prev.feedrate > PREVIOUS_FEEDRATE_THRESHOLD) {
-            bool prev_speed_larger = prev.feedrate > block.feedrate_profile.cruise;
-            float smaller_speed_factor = prev_speed_larger ? (block.feedrate_profile.cruise / prev.feedrate) : (prev.feedrate / block.feedrate_profile.cruise);
-            // Pick the smaller of the nominal speeds. Higher speed shall not be achieved at the junction during coasting.
-            vmax_junction = prev_speed_larger ? block.feedrate_profile.cruise : prev.feedrate;
+            vmax_junction = std::min(prev.feedrate, block.feedrate_profile.cruise);
 
-            float v_factor = 1.0f;
             bool limited = false;
+            Vec3f exit_direction_unit = prev.exit_direction.normalized();
+            Vec3f enter_direction_unit = curr.enter_direction.normalized();
+            float k, k_min = 10000.f;
 
-            for (unsigned char a = X; a <= E; ++a) {
+            for (unsigned char a = X; a <= Z; ++a) {
                 // Limit an axis. We have to differentiate coasting from the reversal of an axis movement, or a full stop.
                 if (a == X) {
-                    Vec3f exit_v = prev.feedrate * (prev.exit_direction);
-                    if (prev_speed_larger)
-                        exit_v *= smaller_speed_factor;
-                    Vec3f entry_v = block.feedrate_profile.cruise * (curr.enter_direction);
-                    Vec3f jerk_v = entry_v - exit_v;
+                    Vec3f jerk_v = enter_direction_unit - exit_direction_unit;
                     jerk_v = Vec3f(abs(jerk_v.x()), abs(jerk_v.y()), abs(jerk_v.z()));
                     Vec3f max_xyz_jerk_v = get_xyz_max_jerk(static_cast<PrintEstimatedStatistics::ETimeMode>(i));
 
-                    for (size_t i = 0; i < 3; i++)
-                    {
-                        if (jerk_v[i] > max_xyz_jerk_v[i]) {
-                            v_factor *= max_xyz_jerk_v[i] / jerk_v[i];
-                            jerk_v *= v_factor;
+                    for (size_t i = 0; i < 3; i++){
+                        if (jerk_v[i] > 0) {
                             limited = true;
+                            k = max_xyz_jerk_v[i] / jerk_v[i];
+                            if (k < k_min)
+                                k_min = k;
                         }
                     }
                 }
                 else if (a == Y || a == Z) {
                     continue;
                 }
-                else {
-                    float v_exit = prev.axis_feedrate[a];
-                    float v_entry = curr.axis_feedrate[a];
-
-                    if (prev_speed_larger)
-                        v_exit *= smaller_speed_factor;
-
-                    if (limited) {
-                        v_exit *= v_factor;
-                        v_entry *= v_factor;
-                    }
-
-                    // Calculate the jerk depending on whether the axis is coasting in the same direction or reversing a direction.
-                    float jerk =
-                        (v_exit > v_entry) ?
-                        (((v_entry > 0.0f) || (v_exit < 0.0f)) ?
-                            // coasting
-                            (v_exit - v_entry) :
-                            // axis reversal
-                            std::max(v_exit, -v_entry)) :
-                        // v_exit <= v_entry
-                        (((v_entry < 0.0f) || (v_exit > 0.0f)) ?
-                            // coasting
-                            (v_entry - v_exit) :
-                            // axis reversal
-                            std::max(-v_exit, v_entry));
-
-
-                    float axis_max_jerk = get_axis_max_jerk(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a));
-                    if (jerk > axis_max_jerk) {
-                        v_factor *= axis_max_jerk / jerk;
-                        limited = true;
-                    }
-                }
             }
 
             if (limited)
-                vmax_junction *= v_factor;
+                vmax_junction = k_min;
 
             // Now the transition velocity is known, which maximizes the shared exit / entry velocity while
             // respecting the jerk factors, it may be possible, that applying separate safe exit / entry velocities will achieve faster prints.
@@ -4272,7 +4267,7 @@ void GCodeProcessor::process_VG1(const GCodeReader::GCodeLine& line)
 
             curr.abs_axis_feedrate[a] = std::abs(curr.axis_feedrate[a]);
             if (curr.abs_axis_feedrate[a] != 0.0f) {
-                float axis_max_feedrate = get_axis_max_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), m_extruder_id);
+                float axis_max_feedrate = get_axis_max_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), get_extruder_id());
                 if (axis_max_feedrate != 0.0f) min_feedrate_factor = std::min<float>(min_feedrate_factor, axis_max_feedrate / curr.abs_axis_feedrate[a]);
             }
         }
@@ -4296,7 +4291,7 @@ void GCodeProcessor::process_VG1(const GCodeReader::GCodeLine& line)
 
         //BBS
         for (unsigned char a = X; a <= E; ++a) {
-            float axis_max_acceleration = get_axis_max_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), m_extruder_id);
+            float axis_max_acceleration = get_axis_max_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), get_extruder_id());
             if (acceleration * std::abs(delta_pos[a]) * inv_distance > axis_max_acceleration)
                 acceleration = axis_max_acceleration / (std::abs(delta_pos[a]) * inv_distance);
         }
@@ -4428,6 +4423,8 @@ void GCodeProcessor::process_VG1(const GCodeReader::GCodeLine& line)
 // BBS: this function is absolutely new for G2 and G3 gcode
 void  GCodeProcessor::process_G2_G3(const GCodeReader::GCodeLine& line)
 {
+    process_helioadditive_comment(line);
+
     int filament_id = get_filament_id();
     float filament_diameter = (static_cast<size_t>(filament_id) < m_result.filament_diameters.size()) ? m_result.filament_diameters[filament_id] : m_result.filament_diameters.back();
     float filament_radius = 0.5f * filament_diameter;
@@ -4658,7 +4655,7 @@ void  GCodeProcessor::process_G2_G3(const GCodeReader::GCodeLine& line)
 
             curr.abs_axis_feedrate[a] = std::abs(curr.axis_feedrate[a]);
             if (curr.abs_axis_feedrate[a] != 0.0f) {
-                float axis_max_feedrate = get_axis_max_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), m_extruder_id);
+                float axis_max_feedrate = get_axis_max_feedrate(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), get_extruder_id());
                 if (axis_max_feedrate != 0.0f) min_feedrate_factor = std::min<float>(min_feedrate_factor, axis_max_feedrate / curr.abs_axis_feedrate[a]);
             }
         }
@@ -4685,7 +4682,7 @@ void  GCodeProcessor::process_G2_G3(const GCodeReader::GCodeLine& line)
                 axis_acc[a] = acceleration * std::abs(delta_pos[a]) * inv_distance;
 
             if (axis_acc[a] != 0.0f) {
-                float axis_max_acceleration = get_axis_max_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), m_extruder_id);
+                float axis_max_acceleration = get_axis_max_acceleration(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a), get_extruder_id());
                 if (axis_max_acceleration != 0.0f && axis_acc[a] > axis_max_acceleration) min_acc_factor = std::min<float>(min_acc_factor, axis_max_acceleration / axis_acc[a]);
             }
         }
@@ -4703,74 +4700,39 @@ void  GCodeProcessor::process_G2_G3(const GCodeReader::GCodeLine& line)
         static const float PREVIOUS_FEEDRATE_THRESHOLD = 0.0001f;
         float vmax_junction = curr.safe_feedrate;
         if (!blocks.empty() && prev.feedrate > PREVIOUS_FEEDRATE_THRESHOLD) {
-            bool prev_speed_larger = prev.feedrate > block.feedrate_profile.cruise;
-            float smaller_speed_factor = prev_speed_larger ? (block.feedrate_profile.cruise / prev.feedrate) : (prev.feedrate / block.feedrate_profile.cruise);
             //BBS: Pick the smaller of the nominal speeds. Higher speed shall not be achieved at the junction during coasting.
-            vmax_junction = prev_speed_larger ? block.feedrate_profile.cruise : prev.feedrate;
+            vmax_junction = std::min(prev.feedrate, block.feedrate_profile.cruise);
 
-            float v_factor = 1.0f;
             bool limited = false;
 
-            for (unsigned char a = X; a <= E; ++a) {
+            Vec3f exit_direction_unit = prev.exit_direction.normalized();
+            Vec3f entry_direction_unit = curr.enter_direction.normalized();
+            float k=0, k_min = 10000.f;
+
+            for (unsigned char a = X; a <= Z; ++a) {
                 //BBS: Limit an axis. We have to differentiate coasting from the reversal of an axis movement, or a full stop.
                 if (a == X) {
-                    Vec3f exit_v = prev.feedrate * (prev.exit_direction);
-                    if (prev_speed_larger)
-                        exit_v *= smaller_speed_factor;
-                    Vec3f entry_v = block.feedrate_profile.cruise * (curr.enter_direction);
-                    Vec3f jerk_v = entry_v - exit_v;
+                    Vec3f jerk_v = entry_direction_unit - exit_direction_unit;
                     jerk_v = Vec3f(abs(jerk_v.x()), abs(jerk_v.y()), abs(jerk_v.z()));
                     Vec3f max_xyz_jerk_v = get_xyz_max_jerk(static_cast<PrintEstimatedStatistics::ETimeMode>(i));
 
                     for (size_t i = 0; i < 3; i++)
                     {
-                        if (jerk_v[i] > max_xyz_jerk_v[i]) {
-                            v_factor *= max_xyz_jerk_v[i] / jerk_v[i];
-                            jerk_v *= v_factor;
+                        if(jerk_v[i] > 0){
                             limited = true;
+                            k = max_xyz_jerk_v[i] / jerk_v[i];
+                            if(k < k_min)
+                                k_min = k;
                         }
                     }
                 }
                 else if (a == Y || a == Z) {
                     continue;
                 }
-                else {
-                    float v_exit = prev.axis_feedrate[a];
-                    float v_entry = curr.axis_feedrate[a];
-
-                    if (prev_speed_larger)
-                        v_exit *= smaller_speed_factor;
-
-                    if (limited) {
-                        v_exit *= v_factor;
-                        v_entry *= v_factor;
-                    }
-
-                    //BBS: Calculate the jerk depending on whether the axis is coasting in the same direction or reversing a direction.
-                    float jerk =
-                        (v_exit > v_entry) ?
-                        (((v_entry > 0.0f) || (v_exit < 0.0f)) ?
-                            //BBS: coasting
-                            (v_exit - v_entry) :
-                            //BBS: axis reversal
-                            std::max(v_exit, -v_entry)) :
-                        (((v_entry < 0.0f) || (v_exit > 0.0f)) ?
-                            //BBS: coasting
-                            (v_entry - v_exit) :
-                            //BBS: axis reversal
-                            std::max(-v_exit, v_entry));
-
-
-                    float axis_max_jerk = get_axis_max_jerk(static_cast<PrintEstimatedStatistics::ETimeMode>(i), static_cast<Axis>(a));
-                    if (jerk > axis_max_jerk) {
-                        v_factor *= axis_max_jerk / jerk;
-                        limited = true;
-                    }
-                }
             }
 
             if (limited)
-                vmax_junction *= v_factor;
+                vmax_junction = k_min;
 
             //BBS: Now the transition velocity is known, which maximizes the shared exit / entry velocity while
             // respecting the jerk factors, it may be possible, that applying separate safe exit / entry velocities will achieve faster prints.
@@ -4871,10 +4833,13 @@ void GCodeProcessor::process_G4(const GCodeReader::GCodeLine& line)
 //BBS
 void GCodeProcessor::process_G29(const GCodeReader::GCodeLine& line)
 {
-    //BBS: hardcode 260 seconds for G29
-    //Todo: use a machine related setting when we have second kind of BBL printer
-    const float value_s = 260.0;
-    simulate_st_synchronize(value_s);
+    if (s_IsBBLPrinter){
+        if(m_measure_g29_time)
+            simulate_st_synchronize(m_time_processor.prepare_compensation_time);
+    }
+    else{
+        simulate_st_synchronize(m_time_processor.prepare_compensation_time);
+    }
 }
 
 void GCodeProcessor::process_G10(const GCodeReader::GCodeLine& line)
@@ -5295,6 +5260,24 @@ void GCodeProcessor::process_M221(const GCodeReader::GCodeLine& line)
     }
 }
 
+void GCodeProcessor::process_M622(const GCodeReader::GCodeLine& line)
+{
+    float value_j;
+    if(line.has_value('J',value_j)){
+        int interger_j = (int)(std::round(value_j));
+        if(interger_j == 1 && !m_measure_g29_time)
+            m_measure_g29_time = true;
+    }
+
+}
+
+void GCodeProcessor::process_M623(const GCodeReader::GCodeLine& line)
+{
+    if(m_measure_g29_time)
+        m_measure_g29_time = false;
+}
+
+
 void GCodeProcessor::process_M400(const GCodeReader::GCodeLine& line)
 {
     float value_s = 0.0;
@@ -5575,6 +5558,9 @@ void GCodeProcessor::store_move_vertex(EMoveType type, EMovePathType path_type)
         m_fan_speed,
         m_extruder_temps[filament_id],
         static_cast<float>(m_layer_id), //layer_duration: set later
+        m_thermal_index.min,
+        m_thermal_index.max,
+        m_thermal_index.mean,
         {0.f,0.f}, // prefix sum of move time to this move : set later
         //BBS: add plate's offset to the rendering vertices
         Vec3f(m_end_position[X] + m_x_offset, m_end_position[Y] + m_y_offset, m_processing_start_custom_gcode ? m_first_layer_height : m_end_position[Z]) + m_extruder_offsets[filament_id],

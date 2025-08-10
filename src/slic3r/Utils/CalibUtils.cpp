@@ -8,12 +8,15 @@
 
 #include "libslic3r/Model.hpp"
 #include "../GUI/MsgDialog.hpp"
+#include "BBLUtil.hpp"
+#include "../GUI/Plater.hpp"
 
 
 namespace Slic3r {
 namespace GUI {
 const float MIN_PA_K_VALUE = 0.0;
 const float MAX_PA_K_VALUE = 2.0;
+static const float MIN_PA_K_VALUE_STEP = 0.001;
 
 std::shared_ptr<PrintJob> CalibUtils::print_job;
 wxString wxstr_temp_dir = fs::path(fs::temp_directory_path() / "calib").wstring();
@@ -72,6 +75,29 @@ wxString get_nozzle_volume_type_name(NozzleVolumeType type)
         return _L("High Flow");
     }
     return wxString();
+}
+
+static int get_physical_extruder_idx(std::vector<int> physical_extruder_maps, int extruder_id)
+{
+    for (size_t index = 0; index < physical_extruder_maps.size(); ++index) {
+        if (physical_extruder_maps[index] == extruder_id) {
+            return index;
+        }
+    }
+    return extruder_id;
+}
+
+bool is_pa_params_valid(const Calib_Params &params)
+{
+    if (params.start < MIN_PA_K_VALUE || params.end > MAX_PA_K_VALUE || params.step < MIN_PA_K_VALUE_STEP || params.end < params.start + params.step) {
+        MessageDialog msg_dlg(nullptr,
+                              wxString::Format(_L("Please input valid values:\nStart value: >= %.1f\nEnd value: <= %.1f\nEnd value: > Start value\nValue step: >= %.3f)"),
+                                               MIN_PA_K_VALUE, MAX_PA_K_VALUE, MIN_PA_K_VALUE_STEP),
+                              wxEmptyString, wxICON_WARNING | wxOK);
+        msg_dlg.ShowModal();
+        return false;
+    }
+    return true;
 }
 
 void get_tray_ams_and_slot_id(MachineObject* obj, int in_tray_id, int &ams_id, int &slot_id, int &tray_id)
@@ -960,6 +986,7 @@ void CalibUtils::calib_max_vol_speed(const CalibInfo &calib_info, wxString &erro
     filament_config.set_key_value("curr_bed_type", new ConfigOptionEnum<BedType>(calib_info.bed_type));
 
     print_config.set_key_value("enable_overhang_speed", new ConfigOptionBoolsNullable{false});
+    print_config.set_key_value("enable_height_slowdown", new ConfigOptionBoolsNullable{ false });
     print_config.set_key_value("timelapse_type", new ConfigOptionEnum<TimelapseType>(tlTraditional));
     print_config.set_key_value("wall_loops", new ConfigOptionInt(1));
     print_config.set_key_value("top_shell_layers", new ConfigOptionInt(0));
@@ -1025,6 +1052,7 @@ void CalibUtils::calib_VFA(const CalibInfo &calib_info, wxString &error_message)
     filament_config.set_key_value("curr_bed_type", new ConfigOptionEnum<BedType>(calib_info.bed_type));
 
     print_config.set_key_value("enable_overhang_speed", new ConfigOptionBoolsNullable{false});
+    print_config.set_key_value("enable_height_slowdown", new ConfigOptionBoolsNullable{ false });
     print_config.set_key_value("timelapse_type", new ConfigOptionEnum<TimelapseType>(tlTraditional));
     print_config.set_key_value("wall_loops", new ConfigOptionInt(1));
     print_config.set_key_value("top_shell_layers", new ConfigOptionInt(0));
@@ -1157,26 +1185,13 @@ bool CalibUtils::check_printable_status_before_cali(const MachineObject *obj, co
         return false;
     }
 
-    float cali_diameter = cali_infos.calib_datas[0].nozzle_diameter;
-    int   extruder_id   = cali_infos.calib_datas[0].extruder_id;
     for (const auto& cali_info : cali_infos.calib_datas) {
         if (cali_infos.cali_mode == CalibMode::Calib_PA_Line && !is_support_auto_pa_cali(cali_info.filament_id)) {
             error_message = _L("TPU 90A/TPU 85A is too soft and does not support automatic Flow Dynamics calibration.");
             return false;
         }
-
-        if (!is_approx(cali_diameter, cali_info.nozzle_diameter)) {
-            error_message = _L("Automatic calibration only supports cases where the left and right nozzle diameters are identical.");
-            return false;
-        }
     }
 
-    if (extruder_id >= obj->m_extder_data.extders.size()) {
-        error_message = _L("The number of printer extruders and the printer selected for calibration does not match.");
-        return false;
-    }
-
-    float diameter = obj->m_extder_data.extders[extruder_id].current_nozzle_diameter;
     bool  is_multi_extruder = obj->is_multi_extruders();
     std::vector<NozzleFlowType> nozzle_volume_types;
     if (is_multi_extruder) {
@@ -1185,11 +1200,23 @@ bool CalibUtils::check_printable_status_before_cali(const MachineObject *obj, co
         }
     }
 
+    Preset *printer_preset = get_printer_preset(obj);
+
     for (const auto &cali_info : cali_infos.calib_datas) {
         wxString name = _L("left");
         if (cali_info.extruder_id == 0) {
             name = _L("right");
         }
+
+        float cali_diameter = cali_info.nozzle_diameter;
+        int   extruder_id   = cali_info.extruder_id;
+
+        if (extruder_id >= obj->m_extder_data.extders.size()) {
+            error_message = _L("The number of printer extruders and the printer selected for calibration does not match.");
+            return false;
+        }
+
+        float diameter = obj->m_extder_data.extders[extruder_id].current_nozzle_diameter;
 
         if (!is_approx(cali_info.nozzle_diameter, diameter)) {
             if (is_multi_extruder)
@@ -1446,7 +1473,7 @@ void CalibUtils::send_to_print(const CalibInfo &calib_info, wxString &error_mess
         j["print"]["print_numbers"]   = calib_info.params.print_numbers;
         j["print"]["flow_ratio_mode"] = flow_ratio_mode;
         j["print"]["tray_id"]         = calib_info.select_ams;
-        j["print"]["dev_id"]          = calib_info.dev_id;
+        j["print"]["dev_id"]          = BBLCrossTalk::Crosstalk_DevId(calib_info.dev_id);
         j["print"]["bed_type"]        = calib_info.bed_type;
         j["print"]["printer_prest"]   = calib_info.printer_prest ? calib_info.printer_prest->name : "";
         j["print"]["filament_prest"]  = calib_info.filament_prest ? calib_info.filament_prest->name : "";
@@ -1541,7 +1568,7 @@ void CalibUtils::send_to_print(const CalibInfo &calib_info, wxString &error_mess
     print_job->set_calibration_task(true);
 
     print_job->has_sdcard = obj_->get_sdcard_state() == MachineObject::SdcardState::HAS_SDCARD_NORMAL;
-    print_job->set_print_config(MachineBedTypeString[bed_type], true, false, false, false, true, 0, 0, 0);
+    print_job->set_print_config(MachineBedTypeString[bed_type], true, false, false, false, true, false, 0, 0, 0);
     print_job->set_print_job_finished_event(wxGetApp().plater()->get_send_calibration_finished_event(), print_job->m_project_name);
 
     {  // after send: record the print job
@@ -1556,4 +1583,3 @@ void CalibUtils::send_to_print(const CalibInfo &calib_info, wxString &error_mess
 
 }
 }
-

@@ -74,7 +74,7 @@ using namespace nlohmann;
 //BBS: add exception handler for win32
 #include <wx/stdpaths.h>
 #ifdef WIN32
-#include "BaseException.h"
+//#include "BaseException.h"
 #endif
 #include "slic3r/GUI/PartPlate.hpp"
 #include "slic3r/GUI/BitmapCache.hpp"
@@ -634,7 +634,7 @@ static int load_key_values_from_json(const std::string &file, std::map<std::stri
 }
 
 static std::set<std::string> gcodes_key_set =  {"filament_end_gcode", "filament_start_gcode", "change_filament_gcode", "layer_change_gcode", "machine_end_gcode", "machine_pause_gcode", "machine_start_gcode",
-            "template_custom_gcode", "printing_by_object_gcode", "before_layer_change_gcode", "time_lapse_gcode"};
+            "template_custom_gcode", "printing_by_object_gcode", "before_layer_change_gcode", "time_lapse_gcode", "wrapping_detection_gcode"};
 
 static void load_default_gcodes_to_config(DynamicPrintConfig& config, Preset::Type type)
 {
@@ -671,6 +671,9 @@ static void load_default_gcodes_to_config(DynamicPrintConfig& config, Preset::Ty
 
         ConfigOptionString* timeplase_gcode_opt = config.option<ConfigOptionString>("time_lapse_gcode", true);
         BOOST_LOG_TRIVIAL(trace) << __FUNCTION__<< ", time_lapse_gcode: "<<timeplase_gcode_opt->value;
+
+        ConfigOptionString *wrapping_detection_gcode_opt = config.option<ConfigOptionString>("wrapping_detection_gcode", true);
+        BOOST_LOG_TRIVIAL(trace) << __FUNCTION__ << ", wrapping_detection_gcode: " << wrapping_detection_gcode_opt->value;
     }
     else if (type == Preset::TYPE_FILAMENT)
     {
@@ -3355,19 +3358,36 @@ int CLI::run(int argc, char **argv)
             std::vector<double>& flush_multipliers = m_print_config.option<ConfigOptionFloats>("flush_multiplier", true)->values;
             flush_multipliers.resize(new_extruder_count, 1.f);
 
-            ConfigOptionEnumsGeneric* nozzle_volume_opt = nullptr;
-            if (m_print_config.has("nozzle_volume_type"))
-                nozzle_volume_opt = m_print_config.option<ConfigOptionEnumsGeneric>("nozzle_volume_type");
-            if (m_extra_config.has("nozzle_volume_type"))
-                nozzle_volume_opt = m_extra_config.option<ConfigOptionEnumsGeneric>("nozzle_volume_type");
+            std::vector<int> nozzle_flush_dataset(new_extruder_count, 0);
+            {
+                std::vector<int> nozzle_flush_dataset_full = m_print_config.option<ConfigOptionIntsNullable>("nozzle_flush_dataset",true)->values;
+                if (m_print_config.has("printer_extruder_variant"))
+                    nozzle_flush_dataset_full.resize(m_print_config.option<ConfigOptionStrings>("printer_extruder_variant")->size(), 0);
+                else
+                    nozzle_flush_dataset_full.resize(1, 0);
 
-            std::vector<NozzleVolumeType> volume_type_list;
-            if (nozzle_volume_opt) {
-                for (size_t idx = 0; idx < nozzle_volume_opt->values.size(); ++idx) {
-                    volume_type_list.emplace_back(NozzleVolumeType(nozzle_volume_opt->values[idx]));
+                std::vector<int> extruders;
+                if (m_print_config.has("extruder_type"))
+                    extruders = m_print_config.option<ConfigOptionEnumsGeneric>("extruder_type")->values;
+                else
+                    extruders.resize(1,int(ExtruderType::etDirectDrive));
+
+                std::vector<int> volume_types;
+                if (m_print_config.has("nozzle_volume_type"))
+                    volume_types = m_print_config.option<ConfigOptionEnumsGeneric>("nozzle_volume_type")->values; // get volume type from 3mf
+                else
+                    volume_types.resize(1, int(NozzleVolumeType::nvtStandard));
+
+                if(m_extra_config.has("nozzle_volume_type")) // get volume type from input
+                    volume_types = m_extra_config.option<ConfigOptionEnumsGeneric>("nozzle_volume_type")->values;
+
+                for (int eidx = 0; eidx < new_extruder_count; ++eidx) {
+                    int index = 0;
+                    if (m_print_config.has("printer_extruder_id") && m_print_config.has("printer_extruder_variant"))
+                        index = m_print_config.get_index_for_extruder(eidx + 1, "printer_extruder_id", ExtruderType(extruders[eidx]), NozzleVolumeType(volume_types[eidx]), "printer_extruder_variant");
+                    nozzle_flush_dataset[eidx] = nozzle_flush_dataset_full[index];
                 }
             }
-            volume_type_list.resize(new_extruder_count, NozzleVolumeType::nvtStandard);
 
             for (size_t nozzle_id = 0; nozzle_id < new_extruder_count; ++nozzle_id) {
             std::vector<double> flush_vol_mtx = get_flush_volumes_matrix(flush_vol_matrix, nozzle_id, new_extruder_count);
@@ -3389,7 +3409,7 @@ int CLI::run(int argc, char **argv)
                                 unsigned char      to_rgb[4] = {};
                                 Slic3r::GUI::BitmapCache::parse_color4(to_color, to_rgb);
 
-                                Slic3r::FlushVolCalculator calculator(min_flush_volumes[from_idx], Slic3r::g_max_flush_volume, new_extruder_count > 1, volume_type_list[nozzle_id]);
+                                Slic3r::FlushVolCalculator calculator(min_flush_volumes[from_idx], Slic3r::g_max_flush_volume,nozzle_flush_dataset[nozzle_id]);
                                 flushing_volume = calculator.calc_flush_vol(from_rgb[3], from_rgb[0], from_rgb[1], from_rgb[2], to_rgb[3], to_rgb[0], to_rgb[1], to_rgb[2]);
                                 if (is_from_support) { flushing_volume = std::max(Slic3r::g_min_flush_volume_from_support, flushing_volume); }
                             }
@@ -3816,7 +3836,10 @@ int CLI::run(int argc, char **argv)
         ConfigOptionFloats* volume_option = print_config.option<ConfigOptionFloats>("filament_prime_volume", true);
         std::vector<double> wipe_volume = volume_option->values;
 
-        Vec3d wipe_tower_size = plate->estimate_wipe_tower_size(print_config, plate_obj_size_info.wipe_width, get_max_element(wipe_volume), new_extruder_count, filaments_cnt);
+        const ConfigOptionBool * wrapping_detection = print_config.option<ConfigOptionBool>("enable_wrapping_detection");
+        bool enable_wrapping = (wrapping_detection != nullptr) && wrapping_detection->value;
+
+        Vec3d wipe_tower_size = plate->estimate_wipe_tower_size(print_config, plate_obj_size_info.wipe_width, get_max_element(wipe_volume), new_extruder_count, filaments_cnt, false, enable_wrapping);
         plate_obj_size_info.wipe_width = wipe_tower_size(0);
         plate_obj_size_info.wipe_depth = wipe_tower_size(1);
 
@@ -4716,6 +4739,37 @@ int CLI::run(int argc, char **argv)
 
                     BOOST_LOG_TRIVIAL(debug) << boost::format("plate %1%: no arrange, directly translate object %2%  by {%3%, %4%}") % (i+1) % mo->name %plate_origin(0) %plate_origin(1);
                 }
+
+                bool is_seq_print = false;
+                get_print_sequence(cur_plate, m_print_config, is_seq_print);
+
+                if (!is_seq_print && assemble_plate.filaments_count > 1)
+                {
+                    //prepare the wipe tower
+                    auto printer_structure_opt = m_print_config.option<ConfigOptionEnum<PrinterStructure>>("printer_structure");
+                    // set the default position, the same with print config(left top)
+                    float x = WIPE_TOWER_DEFAULT_X_POS;
+                    float y = WIPE_TOWER_DEFAULT_Y_POS;
+                    if (printer_structure_opt && printer_structure_opt->value == PrinterStructure::psI3) {
+                        x = I3_WIPE_TOWER_DEFAULT_X_POS;
+                        y = I3_WIPE_TOWER_DEFAULT_Y_POS;
+                    }
+                    if (x < WIPE_TOWER_MARGIN) {
+                        x = WIPE_TOWER_MARGIN;
+                    }
+                    if (y < WIPE_TOWER_MARGIN) {
+                        y = WIPE_TOWER_MARGIN;
+                    }
+
+                    //create the options using default if neccessary
+                    ConfigOptionFloats* wipe_x_option = m_print_config.option<ConfigOptionFloats>("wipe_tower_x", true);
+                    ConfigOptionFloats* wipe_y_option = m_print_config.option<ConfigOptionFloats>("wipe_tower_y", true);
+                    ConfigOptionFloat wt_x_opt(x);
+                    ConfigOptionFloat wt_y_opt(y);
+
+                    wipe_x_option->set_at(&wt_x_opt, i, 0);
+                    wipe_y_option->set_at(&wt_y_opt, i, 0);
+                }
             }
         }
 
@@ -4982,7 +5036,10 @@ int CLI::run(int argc, char **argv)
 
                             //float depth = v * (filaments_cnt - 1) / (layer_height * w);
 
-                            Vec3d wipe_tower_size = cur_plate->estimate_wipe_tower_size(m_print_config, w, get_max_element(v), new_extruder_count, filaments_cnt);
+                            const ConfigOptionBool *wrapping_detection = m_print_config.option<ConfigOptionBool>("enable_wrapping_detection");
+                            bool   enable_wrapping    = (wrapping_detection != nullptr) && wrapping_detection->value;
+
+                            Vec3d wipe_tower_size = cur_plate->estimate_wipe_tower_size(m_print_config, w, get_max_element(v), new_extruder_count, filaments_cnt, false, enable_wrapping);
                             Vec3d plate_origin = cur_plate->get_origin();
                             int plate_width, plate_depth, plate_height;
                             partplate_list.get_plate_size(plate_width, plate_depth, plate_height);
@@ -6161,7 +6218,7 @@ int CLI::run(int argc, char **argv)
                                     else {
                                         if (!opengl_valid)
                                             opengl_valid = init_opengl_and_colors(model, colors);
-                                        outfile = print_fff->export_gcode(outfile, gcode_result, cli_generate_thumbnails);
+                                        outfile = opengl_valid ? print_fff->export_gcode(outfile, gcode_result, cli_generate_thumbnails) : print_fff->export_gcode(outfile, gcode_result, nullptr);
                                     }
                                     slice_time[TIME_USING_CACHE] = slice_time[TIME_USING_CACHE] + ((long long)Slic3r::Utils::get_current_milliseconds_time_utc() - temp_time);
                                     BOOST_LOG_TRIVIAL(info) << "export_gcode finished: time_using_cache update to " << slice_time[TIME_USING_CACHE] << " secs.";
@@ -7491,10 +7548,10 @@ extern "C" {
 
 //BBS: register default exception handler
 #if BBL_RELEASE_TO_PUBLIC
-        SET_DEFULTER_HANDLER();
+        //SET_DEFULTER_HANDLER();
 #else
         //AddVectoredExceptionHandler(1, CBaseException::UnhandledExceptionFilter);
-        SET_DEFULTER_HANDLER();
+        //SET_DEFULTER_HANDLER();
 #endif
         std::set_new_handler([]() {
             int *a = nullptr;

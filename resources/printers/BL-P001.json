@@ -14,6 +14,10 @@
 				}
 			},
 			"nozzle_temp_range": [ 0, 300 ],
+			"nozzle_replace_wiki": {
+				"zh": "https://wiki.bambulab.com/zh/x1/maintenance/replace-hotend",
+				"en": "https://wiki.bambulab.com/en/x1/maintenance/replace-hotend"
+			},
 			"support_motor_noise_cali": false,
 			"support_tunnel_mqtt": false,
 			"support_mqtt_alive": false,
@@ -46,6 +50,7 @@
 		"model_id": "BL-P001",
 		"compatible_machine": [ "BL-P002", "C11", "C12", "C13" ],
 		"auto_cali_not_support_filaments": [ "GFU03", "GFU04" ],
+		"support_wrapping_deteciton": false,
 		"printer_type": "3DPrinter-X1-Carbon",
 		"printer_thumbnail_image": "printer_thumbnail",
 		"printer_connect_help_image": "input_access_code_x1",

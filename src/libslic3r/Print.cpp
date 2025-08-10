@@ -35,6 +35,7 @@
 #include "nlohmann/json.hpp"
 
 #include "GCode/ConflictChecker.hpp"
+#include "ParameterUtils.hpp"
 
 #include <codecvt>
 
@@ -132,6 +133,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "top_surface_acceleration",
         "accel_to_decel_enable",
         "accel_to_decel_factor",
+        "enable_wrapping_detection",
         // BBS
         "supertack_plate_temp_initial_layer",
         "cool_plate_temp_initial_layer",
@@ -141,6 +143,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "gcode_add_line_number",
         "layer_change_gcode",
         "time_lapse_gcode",
+        "wrapping_detection_gcode",
         "fan_min_speed",
         "fan_max_speed",
         "printable_height",
@@ -332,7 +335,12 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
             //BBS: when enable arc fitting, we must re-generate perimeter
             || opt_key == "enable_arc_fitting"
             || opt_key == "wall_sequence"
-            || opt_key == "z_direction_outwall_speed_continuous") {
+            || opt_key == "z_direction_outwall_speed_continuous"
+            || opt_key == "override_filament_scarf_seam_setting"
+            || opt_key == "seam_slope_type"
+            || opt_key == "seam_slope_start_height"
+            || opt_key == "seam_slope_gap"
+            || opt_key == "seam_slope_min_length") {
             osteps.emplace_back(posPerimeters);
             osteps.emplace_back(posInfill);
             osteps.emplace_back(posSupportMaterial);
@@ -904,6 +912,13 @@ static StringObjectException layered_print_cleareance_valid(const Print &print, 
         }
     }
 
+    Pointfs wrapping_detection_area = get_wrapping_detection_area(print_config.wrapping_detection_path.values, print_config.extruder_clearance_max_radius.value / 2);
+    Polygon wrapping_poly;
+    for (size_t i = 0; i < wrapping_detection_area.size(); ++i) {
+        auto pt = wrapping_detection_area[i];
+        wrapping_poly.points.emplace_back(scale_(pt.x() + print_origin.x()), scale_(pt.y() + print_origin.y()));
+    }
+
     std::map<const PrintInstance*, Polygon> map_model_object_to_convex_hull;
     // sequential_print_horizontal_clearance_valid
     Polygons convex_hulls_other;
@@ -944,6 +959,11 @@ static StringObjectException layered_print_cleareance_valid(const Print &print, 
                 warning->object = inst->model_instance->get_object();
             }*/
         }
+
+        if (print_config.enable_wrapping_detection.value && !intersection(wrapping_poly, convex_hull).empty()) {
+            return {inst->model_instance->get_object()->name + L(" is too close to clumping detection area, there may be collisions when printing.") + "\n",
+                inst->model_instance->get_object()};
+        }
         convex_hulls_other.emplace_back(convex_hull);
     }
 
@@ -976,7 +996,9 @@ static StringObjectException layered_print_cleareance_valid(const Print &print, 
             convex_hulls_temp.push_back(wipe_tower_convex_hull);
         } else {
             //here, wipe_tower_polygon is not always convex.
-            Polygon wipe_tower_polygon = print.wipe_tower_data().wipe_tower_mesh_data->bottom;
+            Polygon wipe_tower_polygon;
+            if (print.wipe_tower_data().wipe_tower_mesh_data)
+                wipe_tower_polygon = print.wipe_tower_data().wipe_tower_mesh_data->bottom;
             wipe_tower_polygon.translate(Point(scale_(x), scale_(y)));
             convex_hulls_temp.push_back(wipe_tower_polygon);
         }
@@ -992,7 +1014,9 @@ static StringObjectException layered_print_cleareance_valid(const Print &print, 
         }*/
         return {L("Prime Tower") + L(" is too close to exclusion area, and collisions will be caused.\n")};
     }
-
+    if (print_config.enable_wrapping_detection.value && !intersection({wrapping_poly}, convex_hulls_temp).empty()) {
+        return {L("Prime Tower") + L(" is too close to clumping detection area, and collisions will be caused.\n")};
+    }
     return {};
 }
 
@@ -1126,9 +1150,12 @@ StringObjectException Print::validate(StringObjectException *warning, Polygons* 
         }
     }
 
-    if (m_config.print_sequence == PrintSequence::ByObject) {
+    if (m_config.print_sequence == PrintSequence::ByObject && m_objects.size() > 1) {
         if (m_config.timelapse_type == TimelapseType::tlSmooth)
             return {L("Smooth mode of timelapse is not supported when \"by object\" sequence is enabled.")};
+
+        if (m_config.enable_wrapping_detection)
+            return {L("Clumping detection is not supported when \"by object\" sequence is enabled.")};
 
         //BBS: refine seq-print validation logic
         auto ret = sequential_print_clearance_valid(*this, collison_polygons, height_polygons);
@@ -1718,6 +1745,8 @@ void Print::process(std::unordered_map<std::string, long long>* slice_time, bool
                 || (has_extruder1 && model_volume1.config.extruder() != model_volume2.config.extruder()))
                 return false;
             if (!model_volume1.supported_facets.equals(model_volume2.supported_facets))
+                return false;
+            if (!model_volume1.fuzzy_skin_facets.equals(model_volume2.fuzzy_skin_facets))
                 return false;
             if (!model_volume1.seam_facets.equals(model_volume2.seam_facets))
                 return false;
@@ -2463,6 +2492,47 @@ int Print::get_hrc_by_nozzle_type(const NozzleType&type)
     return 0;
 }
 
+std::vector<std::string> Print::get_incompatible_filaments_by_nozzle(const float nozzle_diameter, const std::optional<NozzleVolumeType> nozzle_volume_type)
+{
+    static std::map<std::string, std::map<std::string, std::vector<std::string>>> incompatible_filaments;
+    if(incompatible_filaments.empty()){
+        fs::path file_path = fs::path(resources_dir()) / "info" / "nozzle_incompatibles.json";
+        boost::nowide::ifstream in(file_path.string());
+        json j;
+        try {
+            j = json::parse(in);
+            for(auto& [volume_type, diameter_list] : j["incompatible_nozzles"].items()) {
+                for(auto& [diameter, filaments]: diameter_list.items()){
+                    incompatible_filaments[volume_type][diameter] = filaments.get<std::vector<std::string>>();
+                }
+            }
+        }
+        catch(const json::parse_error& err){
+            in.close();
+            BOOST_LOG_TRIVIAL(error) << __FUNCTION__ << ": parse " << file_path.string() << " got a nlohmann::detail::parse_error, reason = " << err.what();
+
+            incompatible_filaments[get_nozzle_volume_type_string(NozzleVolumeType::nvtHighFlow)] = {};
+            incompatible_filaments[get_nozzle_volume_type_string(NozzleVolumeType::nvtStandard)] = {};
+        }
+    }
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(1) << nozzle_diameter;
+    std::string diameter_str = oss.str();
+
+    if(nozzle_volume_type.has_value()){
+        return incompatible_filaments[get_nozzle_volume_type_string(nozzle_volume_type.value())][diameter_str];
+    }
+
+    std::vector<std::string> incompatible_filaments_list;
+    for(auto& [volume_type, diameter_list] : incompatible_filaments){
+        auto iter = diameter_list.find(diameter_str);
+        if(iter != diameter_list.end()){
+            append(incompatible_filaments_list, iter->second);
+        }
+    }
+    return incompatible_filaments_list;
+}
+
 void Print::finalize_first_layer_convex_hull()
 {
     append(m_first_layer_convex_hull.points, m_skirt_convex_hull);
@@ -2510,6 +2580,10 @@ void Print::update_filament_maps_to_config(std::vector<int> f_maps)
     m_has_auto_filament_map_result = true;
 }
 
+void Print::apply_config_for_render(const DynamicConfig &config)
+{
+    m_config.apply(config);
+}
 
 std::vector<int> Print::get_filament_maps() const
 {
@@ -2598,6 +2672,9 @@ size_t Print::get_extruder_id(unsigned int filament_id) const
 bool Print::has_wipe_tower() const
 {
     if (m_config.enable_prime_tower.value == true) {
+        if (m_config.enable_wrapping_detection.value)
+            return true;
+
         if (enable_timelapse_print())
             return true;
 
@@ -2709,7 +2786,7 @@ void Print::_make_wipe_tower()
     // Initialize the wipe tower.
     // BBS: in BBL machine, wipe tower is only use to prime extruder. So just use a global wipe volume.
     WipeTower wipe_tower(m_config, m_plate_index, m_origin, m_wipe_tower_data.tool_ordering.first_extruder(),
-        m_wipe_tower_data.tool_ordering.empty() ? 0.f : m_wipe_tower_data.tool_ordering.back().print_z);
+                         m_wipe_tower_data.tool_ordering.empty() ? 0.f : m_wipe_tower_data.tool_ordering.back().print_z, m_wipe_tower_data.tool_ordering.all_extruders());
     wipe_tower.set_has_tpu_filament(this->has_tpu_filament());
     wipe_tower.set_filament_map(this->get_filament_maps());
     // Set the extruder & material properties at the wipe tower object.
@@ -2780,7 +2857,7 @@ void Print::_make_wipe_tower()
             layer_tools.wiping_extrusions().ensure_perimeters_infills_order(*this);
 
             // if enable timelapse, slice all layer
-            if (enable_timelapse_print()) {
+            if (m_config.enable_wrapping_detection || enable_timelapse_print()) {
                 if (layer_tools.wipe_tower_partitions == 0) wipe_tower.set_last_layer_extruder_fill(false);
                 continue;
             }
@@ -4214,6 +4291,7 @@ void WipeTowerData::construct_mesh(float width, float depth, float height, float
 {
     wipe_tower_mesh_data = WipeTowerMeshData{};
     float first_layer_height=0.08; //brim height
+    if (width < EPSILON || depth < EPSILON || height < EPSILON) return;
     if (!is_rib_wipe_tower) {
         wipe_tower_mesh_data->real_wipe_tower_mesh = make_cube(width, depth, height);
         wipe_tower_mesh_data->real_brim_mesh       = make_cube(width + 2 * brim_width, depth + 2 * brim_width, first_layer_height);
@@ -4223,12 +4301,31 @@ void WipeTowerData::construct_mesh(float width, float depth, float height, float
     } else {
         wipe_tower_mesh_data->real_wipe_tower_mesh = WipeTower::its_make_rib_tower(width, depth, height, rib_length, rib_width, fillet_wall);
         wipe_tower_mesh_data->bottom               = WipeTower::rib_section(width, depth, rib_length, rib_width, fillet_wall);
-        wipe_tower_mesh_data->bottom               = offset(wipe_tower_mesh_data->bottom, scaled(brim_width)).front();
+        auto brim_bottom                           = offset(wipe_tower_mesh_data->bottom, scaled(brim_width));
+        if (!brim_bottom.empty())
+            wipe_tower_mesh_data->bottom               = brim_bottom.front();
         wipe_tower_mesh_data->real_brim_mesh       = WipeTower::its_make_rib_brim(wipe_tower_mesh_data->bottom, first_layer_height);
         wipe_tower_mesh_data->real_wipe_tower_mesh.translate(Vec3f(rib_offset[0], rib_offset[1],0));
         wipe_tower_mesh_data->real_brim_mesh.translate(Vec3f(rib_offset[0], rib_offset[1], 0));
         wipe_tower_mesh_data->bottom.translate(scaled(Vec2f(rib_offset[0], rib_offset[1])));
     }
+}
+
+PrintRegion *PrintObjectRegions::FuzzySkinPaintedRegion::parent_print_object_region(const LayerRangeRegions &layer_range) const
+{
+    using FuzzySkinParentType = PrintObjectRegions::FuzzySkinPaintedRegion::ParentType;
+
+    if (this->parent_type == FuzzySkinParentType::PaintedRegion) {
+        return layer_range.painted_regions[this->parent].region;
+    }
+
+    assert(this->parent_type == FuzzySkinParentType::VolumeRegion);
+    return layer_range.volume_regions[this->parent].region;
+}
+
+int PrintObjectRegions::FuzzySkinPaintedRegion::parent_print_object_region_id(const LayerRangeRegions &layer_range) const
+{
+    return this->parent_print_object_region(layer_range)->print_object_region_id();
 }
 
 } // namespace Slic3r

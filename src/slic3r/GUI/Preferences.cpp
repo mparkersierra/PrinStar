@@ -8,8 +8,10 @@
 #include "libslic3r/AppConfig.hpp"
 #include <wx/notebook.h>
 #include "Notebook.hpp"
+#include "ReleaseNote.hpp"
 #include "OG_CustomCtrl.hpp"
 #include "wx/graphics.h"
+#include "Widgets/LinkLabel.hpp"
 #include "Widgets/CheckBox.hpp"
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/RadioBox.hpp"
@@ -17,6 +19,8 @@
 #include <wx/listimpl.cpp>
 #include <map>
 #include "Gizmos/GLGizmoBase.hpp"
+#include "OpenGLManager.hpp"
+#include "../Utils/HelioDragon.hpp"
 #ifdef __WINDOWS__
 #ifdef _MSW_DARK_MODE
 #include "dark_mode.hpp"
@@ -65,7 +69,8 @@ wxBoxSizer *PreferencesDialog::create_item_title(wxString title, wxWindow *paren
     return m_sizer_title;
 }
 
-wxBoxSizer *PreferencesDialog::create_item_combobox(wxString title, wxWindow *parent, wxString tooltip, std::string param, const std::vector<wxString>& label_list, const std::vector<std::string>& value_list)
+
+wxBoxSizer *PreferencesDialog::create_item_combobox(wxString title, wxWindow *parent, wxString tooltip, std::string param, const std::vector<wxString>& label_list, const std::vector<std::string>& value_list, std::function<void(int)> callback, int title_width, int combox_width)
 {
     auto get_value_idx = [value_list](const std::string value) {
         size_t idx = 0;
@@ -78,14 +83,14 @@ wxBoxSizer *PreferencesDialog::create_item_combobox(wxString title, wxWindow *pa
     wxBoxSizer *m_sizer_combox = new wxBoxSizer(wxHORIZONTAL);
     m_sizer_combox->Add(0, 0, 0, wxEXPAND | wxLEFT, 23);
 
-    auto combo_title = new wxStaticText(parent, wxID_ANY, title, wxDefaultPosition, DESIGN_TITLE_SIZE, 0);
+    auto combo_title = new wxStaticText(parent, wxID_ANY, title, wxDefaultPosition, title_width == 0?DESIGN_TITLE_SIZE:wxSize(title_width, -1), 0);
     combo_title->SetForegroundColour(DESIGN_GRAY900_COLOR);
     combo_title->SetFont(::Label::Body_13);
     combo_title->SetToolTip(tooltip);
     combo_title->Wrap(-1);
     m_sizer_combox->Add(combo_title, 0, wxALIGN_CENTER | wxALL, 3);
 
-    auto combobox = new ::ComboBox(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, DESIGN_LARGE_COMBOBOX_SIZE, 0, nullptr, wxCB_READONLY);
+    auto combobox = new ::ComboBox(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, combox_width == 0?DESIGN_LARGE_COMBOBOX_SIZE:wxSize(combox_width, -1), 0, nullptr, wxCB_READONLY);
     combobox->SetFont(::Label::Body_13);
     combobox->GetDropDown().SetFont(::Label::Body_13);
 
@@ -94,14 +99,22 @@ wxBoxSizer *PreferencesDialog::create_item_combobox(wxString title, wxWindow *pa
         combobox->Append(label);
 
     auto old_value = app_config->get(param);
-    if (!old_value.empty()) { combobox->SetSelection(get_value_idx(old_value)); }
+    if (!old_value.empty()) {
+        combobox->SetSelection(get_value_idx(old_value));
+    }
+    else {
+        combobox->SetSelection(0);
+    }
 
     m_sizer_combox->Add(combobox, 0, wxALIGN_CENTER, 0);
 
     //// save config
-    combobox->GetDropDown().Bind(wxEVT_COMBOBOX, [this, param, value_list](wxCommandEvent &e) {
+    combobox->GetDropDown().Bind(wxEVT_COMBOBOX, [this, param, value_list, callback](wxCommandEvent &e) {
         app_config->set(param, value_list[e.GetSelection()]);
         app_config->save();
+        if (callback) {
+            callback(e.GetSelection());
+        }
         e.Skip();
     });
     return m_sizer_combox;
@@ -306,19 +319,6 @@ wxBoxSizer *PreferencesDialog::create_item_region_combobox(wxString title, wxWin
         auto region_index = e.GetSelection();
         auto region       = local_regions[region_index];
 
-        /*auto area   = "";
-        if (region == "CHN" || region == "China")
-            area = "CN";
-        else if (region == "USA")
-            area = "US";
-        else if (region == "Asia-Pacific")
-            area = "Others";
-        else if (region == "Europe")
-            area = "US";
-        else if (region == "North America")
-            area = "US";
-        else
-            area = "Others";*/
         combobox->SetSelection(region_index);
         NetworkAgent* agent = wxGetApp().getAgent();
         AppConfig* config = GUI::wxGetApp().app_config;
@@ -339,6 +339,19 @@ wxBoxSizer *PreferencesDialog::create_item_region_combobox(wxString title, wxWin
             }
         } else {
             config->set("region", region.ToStdString());
+        }
+
+        /*request helio data*/
+        if (config->get("helio_enable") == "true") {
+            std::string helio_api_key = Slic3r::HelioQuery::get_helio_pat();
+            if (helio_api_key.empty()) {
+                wxGetApp().request_helio_pat([](std::string pat) {
+                    Slic3r::HelioQuery::set_helio_pat(pat);
+                    wxGetApp().request_helio_supported_data();
+                });
+            } else {
+                wxGetApp().request_helio_supported_data();
+            }
         }
 
         wxGetApp().update_publish_status();
@@ -855,10 +868,41 @@ wxBoxSizer *PreferencesDialog::create_item_checkbox(wxString title, wxWindow *pa
             }
         }
 
+        if (param == "enable_record_gcodeviewer_option_item"){
+            SimpleEvent evt(EVT_ENABLE_GCODE_OPTION_ITEM_CHANGED);
+            wxPostEvent(wxGetApp().plater(), evt);
+        }
+        if (param == "helio_enable") {
+
+            std::string url;
+            if (checkbox->GetValue()) {
+
+                HelioStatementDialog dlg;
+                auto        res = dlg.ShowModal();
+
+                if (res == wxID_OK) {
+                    std::string helio_api_key = Slic3r::HelioQuery::get_helio_pat();
+                    if (helio_api_key.empty()) {
+                        wxGetApp().request_helio_pat([](std::string pat) {
+                            Slic3r::HelioQuery::set_helio_pat(pat);
+                            wxGetApp().request_helio_supported_data();
+                        });
+                    }
+                    else {
+                        wxGetApp().request_helio_supported_data();
+                    }
+                }
+                else {
+                    wxGetApp().app_config->set_bool("helio_enable", false);
+                    checkbox->SetValue(false);
+                }
+            }
+        }
+
         if (param == "enable_high_low_temp_mixed_printing") {
             if (checkbox->GetValue()) {
                 const wxString warning_title = _L("Bed Temperature Difference Warning");
-                const wxString warning_message = 
+                const wxString warning_message =
                     _L("Using filaments with significantly different temperatures may cause:\n"
                         "• Extruder clogging\n"
                         "• Nozzle damage\n"
@@ -1125,28 +1169,6 @@ wxWindow* PreferencesDialog::create_general_page()
     wxBoxSizer *sizer_page = new wxBoxSizer(wxVERTICAL);
 
     auto title_general_settings = create_item_title(_L("General Settings"), page, _L("General Settings"));
-
-    // bbs supported languages
-    wxLanguage supported_languages[]{
-        wxLANGUAGE_ENGLISH,
-        wxLANGUAGE_CHINESE_SIMPLIFIED,
-        wxLANGUAGE_GERMAN,
-        wxLANGUAGE_FRENCH,
-        wxLANGUAGE_SPANISH,
-        wxLANGUAGE_SWEDISH,
-        wxLANGUAGE_DUTCH,
-        wxLANGUAGE_HUNGARIAN,
-        wxLANGUAGE_JAPANESE,
-        wxLANGUAGE_ITALIAN,
-        wxLANGUAGE_KOREAN,
-        wxLANGUAGE_RUSSIAN,
-        wxLANGUAGE_CZECH,
-        wxLANGUAGE_UKRAINIAN,
-        wxLANGUAGE_PORTUGUESE_BRAZILIAN,
-        wxLANGUAGE_TURKISH,
-        wxLANGUAGE_POLISH
-    };
-
     auto translations = wxTranslations::Get()->GetAvailableTranslations(SLIC3R_APP_KEY);
     std::vector<const wxLanguageInfo *> language_infos;
     language_infos.emplace_back(wxLocale::GetLanguageInfo(wxLANGUAGE_ENGLISH));
@@ -1154,9 +1176,9 @@ wxWindow* PreferencesDialog::create_general_page()
         const wxLanguageInfo *langinfo = wxLocale::FindLanguageInfo(translations[i]);
 
         if (langinfo == nullptr) continue;
-        int language_num = sizeof(supported_languages) / sizeof(supported_languages[0]);
-        for (auto si = 0; si < language_num; si++) {
-            if (langinfo == wxLocale::GetLanguageInfo(supported_languages[si])) {
+
+        for (auto si = 0; si < s_supported_languages.size(); si++) {
+            if (langinfo == wxLocale::GetLanguageInfo(s_supported_languages[si])) {
                 language_infos.emplace_back(langinfo);
             }
         }
@@ -1195,6 +1217,9 @@ wxWindow* PreferencesDialog::create_general_page()
     auto item_restore_hide_pop_ups = create_item_button(_L("Clear my choice for synchronizing printer preset after loading the file."), _L("Clear"), page, _L("Clear my choice for synchronizing printer preset after loading the file."), []() {
         wxGetApp().app_config->erase("app", "sync_after_load_file_show_flag");
     });
+    auto  item_restore_hide_3mf_info = create_item_button(_L("Clear my choice for Load 3mf dialog settings."), _L("Clear"), page, _L("Show the warning dialog again when importing non-Bambu 3MF files"),[]() {
+        wxGetApp().app_config->erase("app", "skip_non_bambu_3mf_warning");
+    });
     auto _3d_settings    = create_item_title(_L("3D Settings"), page, _L("3D Settings"));
     auto item_mouse_zoom_settings  = create_item_checkbox(_L("Zoom to mouse position"), page,
                                                          _L("Zoom in towards the mouse pointer's position in the 3D view, rather than the 2D window center."), 50,
@@ -1208,9 +1233,18 @@ wxWindow* PreferencesDialog::create_general_page()
     auto  item_gamma_correct_in_import_obj = create_item_checkbox(_L("Enable gamma correction for the imported obj file"), page,
                                                                  _L("Perform gamma correction on color after importing the obj model."), 50,
                                                                  "gamma_correct_in_import_obj");
+    auto  item_enable_record_gcodeviewer_option_item = create_item_checkbox(_L("Remember last used color scheme"), page,
+                                                                 _L("When enabled, the last used color scheme (e.g., Line Type, Speed) will be automatically applied on next startup."), 50,
+                                                                 "enable_record_gcodeviewer_option_item");
     auto  enable_lod_settings       = create_item_checkbox(_L("Improve rendering performance by lod"), page,
                                                          _L("Improved rendering performance under the scene of multiple plates and many models."), 50,
                                                          "enable_lod");
+
+    std::vector<wxString> toolbar_style = { _L("Collapsible"), _L("Uncollapsible") };
+    auto item_toolbar_style = create_item_combobox(_L("Toolbar Style"), page, _L("Toolbar Style"), "toolbar_style", toolbar_style, { "0","1" }, [](int idx)->void {
+        const auto& p_ogl_manager = wxGetApp().get_opengl_manager();
+        p_ogl_manager->set_toolbar_rendering_style(idx);
+    });
 
     float range_min = 1.0, range_max = 2.5;
     auto item_grabber_size_settings = create_item_range_input(_L("Grabber scale"), page,
@@ -1244,6 +1278,67 @@ wxWindow* PreferencesDialog::create_general_page()
     auto item_modelmall = create_item_checkbox(_L("Show online staff-picked models on the home page"), page, _L("Show online staff-picked models on the home page"), 50, "staff_pick_switch");
 
     auto item_show_history = create_item_checkbox(_L("Show history on the home page"), page, _L("Show history on the home page"), 50, "show_print_history");
+
+    // helio options
+    wxPanel* helio_fun_panel = new wxPanel(page);
+    helio_fun_panel->SetBackgroundColour(wxColour(248, 248, 248));
+    wxBoxSizer *sizer_helio_fun = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer *sizer_helio_fun_link = new wxBoxSizer(wxHORIZONTAL);
+    wxBoxSizer *sizer_helio_title = new wxBoxSizer(wxHORIZONTAL);
+
+    auto helio_icon_helio = new wxStaticBitmap(helio_fun_panel, wxID_ANY, create_scaled_bitmap("helio_icon_dark", helio_fun_panel, 16), wxDefaultPosition, wxSize(FromDIP(16), FromDIP(16)), 0);
+
+    auto helio_title_slice = create_item_title(_L("Helio Options"), helio_fun_panel, _L("Helio Options"));
+    auto helio_item_switch_slice = create_item_checkbox(_L("Enable Helio"), helio_fun_panel, _L("Enable Helio"), 50, "helio_enable");
+    auto helio_split_line = new wxPanel(helio_fun_panel, wxID_ANY, wxDefaultPosition, wxSize(-1, 1), wxTAB_TRAVERSAL);
+    helio_split_line->SetMaxSize(wxSize(-1, 1));
+    helio_split_line->SetBackgroundColour(DESIGN_GRAY400_COLOR);
+
+
+    auto helio_about_link = new LinkLabel(helio_fun_panel, _L("About Helio"), "https://www.helioadditive.com/");
+    LinkLabel* helio_privacy_link = nullptr;
+
+    if (GUI::wxGetApp().app_config->get("region") == "China") {
+        helio_privacy_link = new LinkLabel(helio_fun_panel, _L("Helio Privacy Policy"), "https://www.helioadditive.com/zh-cn/policies/privacy");
+    } else {
+        helio_privacy_link = new LinkLabel(helio_fun_panel, _L("Helio Privacy Policy"), "https://www.helioadditive.com/en-us/policies/privacy");
+    }
+
+    helio_about_link->getLabel()->SetFont(::Label::Body_13);
+    helio_privacy_link->getLabel()->SetFont(::Label::Body_13);
+
+    helio_about_link->SeLinkLabelFColour(wxColour(0, 119, 250));
+    helio_privacy_link->SeLinkLabelFColour(wxColour(0, 119, 250));
+
+    helio_about_link->SeLinkLabelBColour(wxColour(248, 248, 248));
+    helio_privacy_link->SeLinkLabelBColour(wxColour(248, 248, 248));
+        ;
+    sizer_helio_fun_link->Add(helio_about_link, 0, wxLEFT, FromDIP(50));
+    sizer_helio_fun_link->Add(helio_privacy_link, 0, wxLEFT, FromDIP(35));
+
+    helio_about_link->Bind(wxEVT_ENTER_WINDOW, [this](auto &e) { SetCursor(wxCURSOR_HAND); });
+    helio_about_link->Bind(wxEVT_LEAVE_WINDOW, [this](auto &e) { SetCursor(wxCURSOR_ARROW); });
+    helio_privacy_link->Bind(wxEVT_ENTER_WINDOW, [this](auto &e) { SetCursor(wxCURSOR_HAND); });
+    helio_privacy_link->Bind(wxEVT_LEAVE_WINDOW, [this](auto &e) { SetCursor(wxCURSOR_ARROW); });
+
+    sizer_helio_title->Add(0, 0, 0, wxLEFT, FromDIP(5));
+    sizer_helio_title->Add(helio_icon_helio, 0, wxALIGN_CENTER, FromDIP(0));
+    sizer_helio_title->Add(0, 0, 0, wxLEFT, FromDIP(3));
+    sizer_helio_title->Add(helio_title_slice, 0, wxALIGN_CENTER, FromDIP(0));
+    sizer_helio_title->Add(helio_split_line, 1, wxALIGN_CENTER, 0);
+
+    sizer_helio_fun->Add(0, 0, 0, wxTOP, FromDIP(9));
+    sizer_helio_fun->Add(sizer_helio_title, 0, wxEXPAND, FromDIP(0));
+    sizer_helio_fun->Add(helio_item_switch_slice, 0, wxTOP, FromDIP(5));
+    sizer_helio_fun->Add(sizer_helio_fun_link, 0, wxTOP, FromDIP(7));
+    sizer_helio_fun->Add(0, 0, 0, wxTOP, FromDIP(9));
+    helio_fun_panel->SetSizer(sizer_helio_fun);
+    helio_fun_panel->Layout();
+    helio_fun_panel->Fit();
+
+    std::vector<wxString>  air_temp_timing_list = {_L("Reminder During Slicing"), _L("Automatic mode")};
+    std::vector<std::string> air_temp_timing_value_list = {"slicing", "auto"};
+
     auto title_project = create_item_title(_L("Project"), page, "");
     auto item_max_recent_count = create_item_input(_L("Maximum recent projects"), "", page, _L("Maximum count of recent projects"), "max_recent_count", [](wxString value) {
         long max = 0;
@@ -1302,13 +1397,16 @@ wxWindow* PreferencesDialog::create_general_page()
     sizer_page->Add(item_auto_transfer_when_switch_preset, 0, wxTOP, FromDIP(3));
     sizer_page->Add(item_mix_print_high_low_temperature, 0, wxTOP, FromDIP(3));
     sizer_page->Add(item_restore_hide_pop_ups, 0, wxTOP, FromDIP(3));
+    sizer_page->Add(item_restore_hide_3mf_info, 0, wxTOP, FromDIP(3));
     sizer_page->Add(_3d_settings, 0, wxTOP | wxEXPAND, FromDIP(20));
     sizer_page->Add(item_mouse_zoom_settings, 0, wxTOP, FromDIP(3));
     sizer_page->Add(item_show_shells_in_preview_settings, 0, wxTOP, FromDIP(3));
     sizer_page->Add(item_import_single_svg_and_split, 0, wxTOP, FromDIP(3));
     sizer_page->Add(item_gamma_correct_in_import_obj, 0, wxTOP, FromDIP(3));
+    sizer_page->Add(item_enable_record_gcodeviewer_option_item, 0, wxTOP, FromDIP(3));
 
     sizer_page->Add(enable_lod_settings, 0, wxTOP, FromDIP(3));
+    sizer_page->Add(item_toolbar_style, 0, wxTOP, FromDIP(3));
     sizer_page->Add(item_grabber_size_settings, 0, wxTOP, FromDIP(3));
     sizer_page->Add(title_presets, 0, wxTOP | wxEXPAND, FromDIP(20));
     sizer_page->Add(item_user_sync, 0, wxTOP, FromDIP(3));
@@ -1334,6 +1432,11 @@ wxWindow* PreferencesDialog::create_general_page()
     wxCommandEvent eee(wxEVT_COMBOBOX);
     update_modelmall(eee);
     item_region->GetItem(size_t(2))->GetWindow()->Bind(wxEVT_COMBOBOX, update_modelmall);
+
+
+    sizer_page->Add(helio_fun_panel, 0, wxTOP | wxEXPAND, FromDIP(20));
+    //sizer_page->Add(helio_item_switch_slice, 0, wxTOP, FromDIP(3));
+
     sizer_page->Add(title_project, 0, wxTOP| wxEXPAND, FromDIP(20));
     sizer_page->Add(item_max_recent_count, 0, wxTOP, FromDIP(3));
     sizer_page->Add(item_save_choise, 0, wxTOP, FromDIP(3));

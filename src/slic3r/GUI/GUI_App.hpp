@@ -27,6 +27,7 @@
 #include <wx/string.h>
 #include <wx/snglinst.h>
 #include <wx/msgdlg.h>
+#include <wx/language.h>
 
 #include <mutex>
 #include <stack>
@@ -62,6 +63,7 @@ struct wxLanguageInfo;
 namespace Slic3r {
 
 class AppConfig;
+class FilamentColorCodeQuery;
 class PresetBundle;
 class PresetUpdater;
 class ModelObject;
@@ -289,7 +291,7 @@ private:
 	size_t m_instance_hash_int;
 
     //BBS
-    bool m_is_closing {false};
+    std::atomic<bool> m_is_closing {false};
     Slic3r::DeviceManager* m_device_manager { nullptr };
     Slic3r::UserManager* m_user_manager { nullptr };
     Slic3r::TaskManager* m_task_manager { nullptr };
@@ -308,6 +310,7 @@ private:
     VersionInfo privacy_version_info;
     static std::string version_display;
     HMSQuery    *hms_query { nullptr };
+    FilamentColorCodeQuery* m_filament_color_code_query{ nullptr };
 
     boost::thread    m_sync_update_thread;
     std::shared_ptr<int> m_user_sync_token;
@@ -344,10 +347,14 @@ public:
     Slic3r::TaskManager*   getTaskManager() { return m_task_manager; }
     HMSQuery* get_hms_query() { return hms_query; }
     NetworkAgent* getAgent() { return m_agent; }
+    FilamentColorCodeQuery* get_filament_color_code_query();
     bool is_editor() const { return m_app_mode == EAppMode::Editor; }
     bool is_gcode_viewer() const { return m_app_mode == EAppMode::GCodeViewer; }
     bool is_recreating_gui() const { return m_is_recreating_gui; }
     std::string logo_name() const { return is_editor() ? "BambuStudio" : "BambuStudio-gcodeviewer"; }
+
+    bool is_closing() const { return m_is_closing.load(std::memory_order_acquire); }
+    void set_closing(bool closing) { m_is_closing.store(closing, std::memory_order_release); }
 
     bool     show_3d_navigator() const { return app_config->get_bool("show_3d_navigator"); }
     void     toggle_show_3d_navigator() const { app_config->set_bool("show_3d_navigator", !show_3d_navigator()); }
@@ -422,7 +429,7 @@ public:
     int             em_unit() const         { return m_em_unit; }
     bool            tabs_as_menu() const;
     wxSize          get_min_size() const;
-    float           toolbar_icon_scale(const bool is_limited = false) const;
+    float           toolbar_icon_scale(bool auto_scale, const bool is_limited = false) const;
     void            set_auto_toolbar_icon_scale(float scale) const;
     void            check_printer_presets();
 
@@ -434,7 +441,6 @@ public:
     void            load_gcode(wxWindow* parent, wxString& input_file) const;
 
     wxString        transition_tridid(int trid_id) const;
-    wxString        transition_tridid(int trid_id, bool is_n3s) const;
     void            ShowUserGuide();
     void            ShowDownNetPluginDlg(bool post_login = false);
     void            ShowUserLogin(bool show = true);
@@ -503,7 +509,12 @@ public:
 
     static bool     catch_error(std::function<void()> cb, const std::string& err);
 
-    void            persist_window_geometry(wxTopLevelWindow *window, bool default_maximized = false);
+    //for helio slice
+    static void     request_helio_pat(std::function<void(std::string)> func);
+    static void     request_helio_supported_data();
+	//static std::vector<Slic3r::HelioQuery::SupportedPrinters> get_helio_support_printer_model();
+
+    void                                               persist_window_geometry(wxTopLevelWindow *window, bool default_maximized = false);
     void            update_ui_from_settings();
 
     bool            switch_language();
@@ -733,10 +744,30 @@ private:
 DECLARE_APP(GUI_App)
 wxDECLARE_EVENT(EVT_CONNECT_LAN_MODE_PRINT, wxCommandEvent);
 
-bool is_support_filament(int extruder_id);
+bool is_support_filament(int extruder_id, bool strict_check = true);
 bool is_soluble_filament(int extruder_id);
 // check if the filament for model is in the list
 bool has_filaments(const std::vector<string>& model_filaments);
+
+static std::vector<wxLanguage> s_supported_languages = {
+    wxLANGUAGE_ENGLISH,
+    wxLANGUAGE_CHINESE_SIMPLIFIED,
+    wxLANGUAGE_GERMAN,
+    wxLANGUAGE_FRENCH,
+    wxLANGUAGE_SPANISH,
+    wxLANGUAGE_SWEDISH,
+    wxLANGUAGE_DUTCH,
+    wxLANGUAGE_HUNGARIAN,
+    wxLANGUAGE_JAPANESE,
+    wxLANGUAGE_ITALIAN,
+    wxLANGUAGE_KOREAN,
+    wxLANGUAGE_RUSSIAN,
+    wxLANGUAGE_CZECH,
+    wxLANGUAGE_UKRAINIAN,
+    wxLANGUAGE_PORTUGUESE_BRAZILIAN,
+    wxLANGUAGE_TURKISH,
+    wxLANGUAGE_POLISH
+};
 } // namespace GUI
 } // Slic3r
 

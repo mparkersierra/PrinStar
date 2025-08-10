@@ -21,6 +21,8 @@
 #include <algorithm>
 #include "BitmapCache.hpp"
 
+#include "slic3r/Utils/BBLUtil.hpp"
+
 
 namespace Slic3r {
 namespace GUI {
@@ -812,7 +814,7 @@ void SendToPrinterDialog::on_ok(wxCommandEvent &event)
     }
     assert(obj_->dev_id == m_printer_last_select);
 
-    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ", print_job: for send task, current printer id =  " << m_printer_last_select << std::endl;
+    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ", print_job: for send task, current printer id =  " <<  BBLCrossTalk::Crosstalk_DevId(m_printer_last_select) << std::endl;
     show_status(PrintDialogStatus::PrintStatusSending);
 
     m_status_bar->reset();
@@ -879,7 +881,7 @@ void SendToPrinterDialog::on_ok(wxCommandEvent &event)
     if(!wxGetApp().plater()->using_exported_file() && !obj_->is_lan_mode_printer()) {
             result = m_plater->export_config_3mf(m_print_plate_idx);
             if (result < 0) {
-                BOOST_LOG_TRIVIAL(info) << "export_config_3mf failed, result = " << result;
+                 BOOST_LOG_TRIVIAL(info) << "export_config_3mf failed, result = " << result;
                 return;
             }
         }
@@ -906,7 +908,7 @@ void SendToPrinterDialog::on_ok(wxCommandEvent &event)
 
 
             m_plater->get_print_job_data(&print_data);
-            std::string project_name = m_current_project_name.utf8_string() + ".3mf";
+            std::string project_name = m_current_project_name.utf8_string() + ".gcode.3mf";
 
             std::string _3mf_path;
             if (wxGetApp().plater()->using_exported_file())
@@ -1182,7 +1184,7 @@ void SendToPrinterDialog::update_user_printer()
         m_comboBox_printer->SetTextLabel("");
     }
 
-    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "for send task, current printer id =  " << m_printer_last_select << std::endl;
+    BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "for send task, current printer id =  " << BBLCrossTalk::Crosstalk_DevId(m_printer_last_select) << std::endl;
 }
 
 void SendToPrinterDialog::update_printer_combobox(wxCommandEvent &event)
@@ -1216,7 +1218,7 @@ void SendToPrinterDialog::on_selection_changed(wxCommandEvent &event)
         if (i == selection) {
             m_printer_last_select = m_list[i]->dev_id;
             obj = m_list[i];
-            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "for send task, current printer id =  " << m_printer_last_select << std::endl;
+            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "for send task, current printer id =  " << BBLCrossTalk::Crosstalk_DevId(m_printer_last_select) << std::endl;
             break;
         }
     }
@@ -1919,8 +1921,10 @@ void SendToPrinterDialog::fetchUrl(boost::weak_ptr<PrinterFileSystem> wfs)
                         url += "&cli_id=" + wxGetApp().app_config->get("slicer_uuid");
                         url += "&cli_ver=" + std::string(SLIC3R_VERSION);
                     }
+
+#if !BBL_RELEASE_TO_PUBLIC
                     BOOST_LOG_TRIVIAL(info) << "SendToPrinter::fetchUrl: camera_url: " << hide_passwd(url, {"?uid=", "authkey=", "passwd="});
-                    std::cout << "SendToPrinter::fetchUrl: camera_url: " << hide_passwd(url, {"?uid=", "authkey=", "passwd="});
+#endif
                     CallAfter([=] {
                         boost::shared_ptr fs(wfs.lock());
                         if (!fs) return;

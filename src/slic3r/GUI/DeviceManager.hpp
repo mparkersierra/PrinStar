@@ -7,6 +7,7 @@
 #include <string>
 #include <memory>
 #include <chrono>
+#include <unordered_set>
 #include <boost/thread.hpp>
 #include <boost/nowide/fstream.hpp>
 #include "nlohmann/json.hpp"
@@ -72,6 +73,10 @@ wxString get_stage_string(int stage);
 using namespace nlohmann;
 
 namespace Slic3r {
+
+namespace GUI {
+    class DeviceErrorDialog; // Previous definitions
+}
 
 class SecondaryCheckDialog;
 enum PrinterArch {
@@ -250,6 +255,11 @@ struct AirMode
     // If the fan is off, it cannot be controlled and is displayed as off
     std::vector<int> off;
     // If the fan is not off or ctrl, it will be displayed as auto
+
+public:
+    bool operator ==(const AirMode& other) const {
+        return (id == other.id) && (ctrl == other.ctrl) && (off == other.off);
+    };
 };
 
 struct AirParts
@@ -260,6 +270,11 @@ struct AirParts
     int         state{ 0 };// 100%
     int         range_start{ 0 };// 100%
     int         range_end{ 0 };// 100%
+
+public:
+    bool operator ==(const AirParts& other) const {
+        return (type == other.type) && (id == other.id) && (func == other.func) && (state == other.state) && (range_start == other.range_start) && (range_end == other.range_end);
+    };
 };
 
 struct AirDuctData
@@ -267,6 +282,22 @@ struct AirDuctData
     int curren_mode{ 0 };
     std::unordered_map<int, AirMode> modes;
     std::vector<AirParts> parts;
+
+    int  m_sub_mode = -1;// the submode of airduct, for cooling: 0-filter, 1-cooling
+    bool m_support_cooling_filter = false;// support switch filter on cooling mode or not
+
+public:
+    bool operator ==(const AirDuctData& other) const {
+        return (curren_mode == other.curren_mode) && (modes == other.modes) && (parts == other.parts) &&
+               (m_sub_mode == other.m_sub_mode) && (m_support_cooling_filter == other.m_support_cooling_filter);
+    };
+
+    bool operator !=(const AirDuctData& other) const {
+        return !(operator==(other));
+    };
+
+    bool IsSupportCoolingFilter() const { return m_support_cooling_filter;}
+    bool IsCoolingFilerOn() const { return m_sub_mode == 0;}
 };
 
 struct RatingInfo {
@@ -484,7 +515,6 @@ enum AIR_DUCT {
     AIR_DUCT_HEATING_INTERNAL_FILT,
     AIR_DUCT_EXHAUST,
     AIR_DUCT_FULL_COOLING,
-    AIR_DUCT_NUM,
     AIR_DUCT_INIT = 0xFF    //Initial mode, only used within mc
 };
 
@@ -663,6 +693,7 @@ public:
 
     //PRINTER_TYPE printer_type = PRINTER_3DPrinter_UKNOWN;
     std::string printer_type;       /* model_id */
+    std::string   get_show_printer_type() const;
     PrinterSeries get_printer_series() const;
     PrinterArch get_printer_arch() const;
     std::string get_printer_ams_type() const;
@@ -766,6 +797,7 @@ public:
     AmsTray *get_ams_tray(std::string ams_id, std::string tray_id);
 
     std::string  get_filament_id(std::string ams_id, std::string tray_id) const;
+    std::string  get_filament_type(const std::string& ams_id, const std::string& tray_id) const;
 
     // parse amsStatusMain and ams_status_sub
     void _parse_ams_status(int ams_status);
@@ -814,6 +846,7 @@ public:
     [[nodiscard]] bool is_nozzle_flow_type_supported() const { return is_enable_np; };
     [[nodiscard]] NozzleFlowType get_nozzle_flow_type(int extruder_id) const;
     [[nodiscard]] Extder get_current_extruder() const;
+    [[nodiscard]] wxString get_nozzle_replace_url() const;
 
     //new fan data
     AirDuctData m_air_duct_data;
@@ -889,6 +922,12 @@ public:
     int     hw_switch_state;
     bool    is_system_printing();
     int     print_error;
+    static std::string get_error_code_str(int error_code);
+    std::string get_print_error_str() const { return MachineObject::get_error_code_str(this->print_error); }
+
+    std::unordered_set<GUI::DeviceErrorDialog*> m_command_error_code_dlgs;
+    void  add_command_error_code_dlg(int command_err);
+
     int     curr_layer = 0;
     int     total_layers = 0;
     bool    is_support_layer_num { false };
@@ -1028,9 +1067,21 @@ public:
 
     int nozzle_setting_hold_count = 0;
 
+    //refine printer
     bool xcam_ai_monitoring{ false };
+    bool xcam_disable_ai_detection_display{false};
+    bool xcam_spaghetti_detection{false};
+    bool xcam_purgechutepileup_detection{false};
+    bool xcam_nozzleclumping_detection{false};
+    bool xcam_airprinting_detection{false};
+
     time_t xcam_ai_monitoring_hold_start = 0;
     std::string xcam_ai_monitoring_sensitivity;
+    std::string xcam_spaghetti_detection_sensitivity;
+    std::string xcam_purgechutepileup_detection_sensitivity;
+    std::string xcam_nozzleclumping_detection_sensitivity;
+    std::string xcam_airprinting_detection_sensitivity;
+
     bool xcam_buildplate_marker_detector{ false };
     time_t  xcam_buildplate_marker_hold_start = 0;
     bool xcam_auto_recovery_step_loss{ false };
@@ -1041,6 +1092,9 @@ public:
     time_t  xcam_filament_tangle_detect_hold_start = 0;
     int  nozzle_selected_count = 0;
     bool flag_update_nozzle = {true};
+
+    // part skip
+    std::vector<int> m_partskip_ids;
 
     /*target from Studio-SwitchBoard, default to INVALID_NOZZLE_ID if no switching control from PC*/
     int targ_nozzle_id_from_pc = INVALID_NOZZLE_ID;
@@ -1091,6 +1145,14 @@ public:
     bool is_support_internal_timelapse { false };// fun[28], support timelapse without SD card
     bool is_support_command_homing { false };// fun[32]
     bool is_support_brtc{false};                 // fun[31], support tcp and upload protocol
+    bool is_support_ext_change_assist{false};
+    bool is_support_partskip{false};
+
+      // refine printer function options
+    bool is_support_spaghetti_detection{false};
+    bool is_support_purgechutepileup_detection{false};
+    bool is_support_nozzleclumping_detection{false};
+    bool is_support_airprinting_detection{false};
 
     bool installed_upgrade_kit{false};
     int  bed_temperature_limit = -1;
@@ -1172,6 +1234,7 @@ public:
     int command_request_push_all(bool request_now = false);
     int command_pushing(std::string cmd);
     int command_clean_print_error(std::string task_id, int print_error);
+    int command_clean_print_error_uiop(int print_error);
     int command_set_printer_nozzle(std::string nozzle_type, float diameter);
     int command_set_printer_nozzle2(int id, std::string nozzle_type, float diameter);
     int command_get_access_code();
@@ -1190,9 +1253,10 @@ public:
     int command_go_home2();
     int command_control_fan(int fan_type, int val);                              // Old protocol
     int command_control_fan_new(int fan_id, int val, const CommandCallBack &cb); // New protocol
-    int command_control_air_duct(int mode_id, const CommandCallBack& cb);
+    int command_control_air_duct(int mode_id, int submode, const CommandCallBack& cb);
     int command_task_abort();
     /* cancelled the job_id */
+    int command_task_partskip(std::vector<int> part_ids);
     int command_task_cancel(std::string job_id);
     int command_task_pause();
     int command_task_resume();
@@ -1204,7 +1268,9 @@ public:
     int command_stop_buzzer();
 
     /* temp*/
+    bool m_support_mqtt_bet_ctrl = false;
     int command_set_bed(int temp);
+
     int command_set_nozzle(int temp);
     int command_set_nozzle_new(int nozzle_id, int temp);
     int command_set_chamber(int temp);
@@ -1221,6 +1287,9 @@ public:
     int command_ams_refresh_rfid(std::string tray_id);
     int command_ams_refresh_rfid2(int ams_id, int slot_id);
     int command_ams_control(std::string action);
+
+    int command_ams_drying_stop();
+
     int command_set_chamber_light(LIGHT_EFFECT effect, int on_time = 500, int off_time = 500, int loops = 1, int interval = 1000);
     int command_set_chamber_light2(LIGHT_EFFECT effect, int on_time = 500, int off_time = 500, int loops = 1, int interval = 1000);
     int command_set_work_light(LIGHT_EFFECT effect, int on_time = 500, int off_time = 500, int loops = 1, int interval = 1000);
@@ -1244,6 +1313,7 @@ public:
     int command_nozzle_blob_detect(bool nozzle_blob_detect);
 
     // axis string is X, Y, Z, E
+    bool m_support_mqtt_axis_control = false;
     int command_axis_control(std::string axis, double unit = 1.0f, double input_val = 1.0f, int speed = 3000);
 
     int command_extruder_control(int nozzle_id, double val);
@@ -1268,7 +1338,14 @@ public:
     int command_ipcam_timelapse(bool on_off);
     int command_ipcam_resolution_set(std::string resolution);
     int command_xcam_control(std::string module_name, bool on_off, std::string lvl = "");
+
+    //refine printer
     int command_xcam_control_ai_monitoring(bool on_off, std::string lvl);
+    int command_xcam_control_spaghetti_detection(bool on_off, std::string lvl);
+    int command_xcam_control_purgechutepileup_detection(bool on_off, std::string lvl);
+    int command_xcam_control_nozzleclumping_detection(bool on_off, std::string lvl);
+    int command_xcam_control_airprinting_detection(bool on_off, std::string lvl);
+
     int command_xcam_control_first_layer_inspector(bool on_off, bool print_halt);
     int command_xcam_control_buildplate_marker_detector(bool on_off);
     int command_xcam_control_auto_recovery_step_loss(bool on_off);
@@ -1306,7 +1383,8 @@ public:
 
     /* Msg for display MsgFn */
     typedef std::function<void(std::string topic, std::string payload)> MsgFn;
-    int publish_json(std::string json_str, int qos = 0, int flag = 0);
+    int publish_json(const json& json_item, int qos = 0, int flag = 0) ;
+    int publish_json(const std::string& json_str, int qos = 0, int flag = 0) = delete;
     int cloud_publish_json(std::string json_str, int qos = 0, int flag = 0);
     int local_publish_json(std::string json_str, int qos = 0, int flag = 0);
     int parse_json(std::string tunnel, std::string payload, bool key_filed_only = false);
@@ -1439,8 +1517,6 @@ public:
 
     bool set_selected_machine(std::string dev_id,  bool need_disconnect = false);
     MachineObject* get_selected_machine();
-    void add_user_subscribe();
-    void del_user_subscribe();
 
     void subscribe_device_list(std::vector<std::string> dev_list);
 
@@ -1492,6 +1568,32 @@ public:
         return T();
     }
 
+    static json get_json_from_config(const std::string& type_str, const std::string& key1, const std::string& key2 = std::string()) {
+        std::string config_file = Slic3r::resources_dir() + "/printers/" + type_str + ".json";
+        boost::nowide::ifstream json_file(config_file.c_str());
+        try {
+            json jj;
+            if (json_file.is_open()) {
+                json_file >> jj;
+                if (jj.contains("00.00.00.00")) {
+                    json const& printer = jj["00.00.00.00"];
+                    if (printer.contains(key1)) {
+                        json const& key1_item = printer[key1];
+                        if (key2.empty()) {
+                            return key1_item;
+                        }
+
+                        if (key1_item.contains(key2)) {
+                            return key1_item[key2];
+                        }
+                    }
+                }
+            }
+        }
+        catch (...) {}
+        return json();
+    }
+
     static std::string parse_printer_type(std::string type_str);
     static std::string get_printer_display_name(std::string type_str);
     static std::string get_printer_thumbnail_img(std::string type_str);
@@ -1505,10 +1607,15 @@ public:
     static bool get_printer_is_enclosed(std::string type_str);
     static bool get_printer_can_set_nozzle(std::string type_str);// can set nozzle from studio
     static bool load_filaments_blacklist_config();
+    static bool support_wrapping_detection(const std::string& type_str);
+
+    static string get_fan_text(const std::string& type_str, const std::string& key);
+
     static std::vector<std::string> get_resolution_supported(std::string type_str);
     static std::vector<std::string> get_compatible_machine(std::string type_str);
     static std::vector<std::string> get_unsupport_auto_cali_filaments(std::string type_str);
     static void check_filaments_in_blacklist(std::string model_id, std::string tag_vendor, std::string tag_type, const std::string& filament_id, int ams_id, int slot_id, std::string tag_name, bool &in_blacklist, std::string &ac, wxString &info);
+    static void check_filaments_in_blacklist_url(std::string model_id, std::string tag_vendor, std::string tag_type, const std::string& filament_id, int ams_id, int slot_id, std::string tag_name, bool& in_blacklist, std::string& ac, wxString& info, wxString& wiki_url);
     static boost::bimaps::bimap<std::string, std::string> get_all_model_id_with_name();
     static std::string load_gcode(std::string type_str, std::string gcode_file);
     static bool is_virtual_slot(int ams_id);

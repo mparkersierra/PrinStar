@@ -1,17 +1,20 @@
 {
     "type": "filament",
-    "name": "Bambu PVA @BBL H2D 0.2 nozzle",
-    "inherits": "Bambu PVA @base",
+    "name": "Bambu ASA @BBL H2D 0.8 nozzle",
+    "inherits": "Bambu ASA @base",
     "from": "system",
-    "setting_id": "GFSS04_11",
+    "setting_id": "GFSB01_33",
     "instantiation": "true",
+    "chamber_temperatures": [
+        "65"
+    ],
     "filament_deretraction_speed": [
         "nil",
         "nil"
     ],
     "filament_flow_ratio": [
-        "1",
-        "1"
+        "0.95",
+        "0.95"
     ],
     "filament_flush_temp": [
         "0",
@@ -26,8 +29,8 @@
         "nil"
     ],
     "filament_max_volumetric_speed": [
-        "1",
-        "1"
+        "25",
+        "35"
     ],
     "filament_ramming_volumetric_speed": [
         "-1",
@@ -50,8 +53,8 @@
         "nil"
     ],
     "filament_retraction_length": [
-        "nil",
-        "nil"
+        "0.4",
+        "0.4"
     ],
     "filament_retraction_minimum_travel": [
         "nil",
@@ -62,20 +65,20 @@
         "nil"
     ],
     "filament_wipe": [
-        "nil",
-        "nil"
+        "1",
+        "1"
     ],
     "filament_wipe_distance": [
-        "nil",
-        "nil"
+        "1",
+        "1"
     ],
     "filament_z_hop": [
         "nil",
         "nil"
     ],
     "filament_z_hop_types": [
-        "nil",
-        "nil"
+        "Spiral Lift",
+        "Spiral Lift"
     ],
     "filament_extruder_variant": [
         "Direct Drive Standard",
@@ -89,24 +92,28 @@
         "0",
         "0"
     ],
+    "filament_extruder_id": [
+        "1",
+        "1"
+    ],
     "long_retractions_when_ec": [
         "1",
         "1"
     ],
     "nozzle_temperature": [
-        "240",
-        "240"
+        "270",
+        "270"
     ],
     "nozzle_temperature_initial_layer": [
-        "240",
-        "240"
+        "270",
+        "270"
     ],
     "retraction_distances_when_ec": [
         "10",
         "10"
     ],
     "compatible_printers": [
-        "Bambu Lab H2D 0.2 nozzle"
+        "Bambu Lab H2D 0.8 nozzle"
     ],
     "filament_start_gcode": [
         "; filament start gcode\n"

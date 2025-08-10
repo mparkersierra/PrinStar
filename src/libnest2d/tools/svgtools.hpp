@@ -146,13 +146,18 @@ public:
         size_t last = svg_layers_.size() > 1 ? svg_layers_.size() : 0;
 
         for (auto &lyr : svg_layers_) {
-            boost::filesystem::ofstream out(filepath, std::fstream::out);
-            if (out.is_open()) out << lyr;
+            // filepath is a boost::filesystem::path
+            std::ofstream out(filepath.string(), std::ofstream::out);
+            if (!out) {
+                // handle error…
+                continue;
+            }
+            out << lyr;
             if (lyrc == last && !finished_) out << "\n</svg>\n";
-            out.flush();
-            out.close();
-            lyrc++;
-        };
+            // ofstream flushes & closes in its destructor
+            ++lyrc;
+        }
+
     }
 
     void add_comment(const std::string comment)

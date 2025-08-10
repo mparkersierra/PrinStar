@@ -155,10 +155,12 @@ bool TCPConsole::run_queue()
         m_io_context.restart();
 
         auto endpoints = m_resolver.resolve(m_host_name, m_port_name);
-
-        m_socket.async_connect(endpoints->endpoint(),
+        auto it = endpoints.begin();               // get the first iterator
+        m_socket.async_connect(
+            *it,                                   // dereference to get the endpoint
             boost::bind(&TCPConsole::handle_connect, this, _1)
         );
+
 
         // Loop until we get any reasonable result. Negative result is also result.
         // TODO: Rewrite to more graceful way using deadlime_timer

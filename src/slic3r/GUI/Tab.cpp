@@ -2134,15 +2134,15 @@ void TabPrint::build()
     optgroup->append_single_option_line("layer_height", "layer-height");
         optgroup->append_single_option_line("initial_layer_print_height", "layer-height");
 
-        optgroup = page->new_optgroup(L("Line width"), L"param_line_width");
-        optgroup->append_single_option_line("line_width","parameter/line-width");
-        optgroup->append_single_option_line("initial_layer_line_width","parameter/line-width");
-        optgroup->append_single_option_line("outer_wall_line_width","parameter/line-width");
-        optgroup->append_single_option_line("inner_wall_line_width","parameter/line-width");
-        optgroup->append_single_option_line("top_surface_line_width","parameter/line-width");
-        optgroup->append_single_option_line("sparse_infill_line_width","parameter/line-width");
-        optgroup->append_single_option_line("internal_solid_infill_line_width","parameter/line-width");
-        optgroup->append_single_option_line("support_line_width","parameter/line-width");
+//        optgroup = page->new_optgroup(L("Line width"), L"param_line_width");
+//        optgroup->append_single_option_line("line_width","parameter/line-width");
+//        optgroup->append_single_option_line("initial_layer_line_width","parameter/line-width");
+//        optgroup->append_single_option_line("outer_wall_line_width","parameter/line-width");
+//        optgroup->append_single_option_line("inner_wall_line_width","parameter/line-width");
+//        optgroup->append_single_option_line("top_surface_line_width","parameter/line-width");
+//        optgroup->append_single_option_line("sparse_infill_line_width","parameter/line-width");
+//        optgroup->append_single_option_line("internal_solid_infill_line_width","parameter/line-width");
+//        optgroup->append_single_option_line("support_line_width","parameter/line-width");
 
         optgroup = page->new_optgroup(L("Seam"), L"param_seam");
         optgroup->append_single_option_line("seam_position", "Seam");
@@ -2168,14 +2168,14 @@ void TabPrint::build()
         optgroup->append_single_option_line("precise_outer_wall");
         optgroup->append_single_option_line("precise_z_height");
 
-        optgroup = page->new_optgroup(L("Ironing"), L"param_ironing");
-        optgroup->append_single_option_line("ironing_type", "parameter/ironing");
-        optgroup->append_single_option_line("ironing_pattern");
-        optgroup->append_single_option_line("ironing_speed");
-        optgroup->append_single_option_line("ironing_flow");
-        optgroup->append_single_option_line("ironing_spacing");
-        optgroup->append_single_option_line("ironing_inset");
-        optgroup->append_single_option_line("ironing_direction");
+//        optgroup = page->new_optgroup(L("Ironing"), L"param_ironing");
+//        optgroup->append_single_option_line("ironing_type", "parameter/ironing");
+//        optgroup->append_single_option_line("ironing_pattern");
+//        optgroup->append_single_option_line("ironing_speed");
+//        optgroup->append_single_option_line("ironing_flow");
+//        optgroup->append_single_option_line("ironing_spacing");
+//        optgroup->append_single_option_line("ironing_inset");
+//        optgroup->append_single_option_line("ironing_direction");
 
         optgroup = page->new_optgroup(L("Wall generator"), L"param_wall");
         optgroup->append_single_option_line("wall_generator", "wall-generator");
@@ -2188,9 +2188,9 @@ void TabPrint::build()
 
         optgroup = page->new_optgroup(L("Advanced"), L"param_advanced");
         optgroup->append_single_option_line("wall_sequence","parameter/quality-advance-settings");
-        optgroup->append_single_option_line("is_infill_first","parameter/quality-advance-settings");
-        optgroup->append_single_option_line("bridge_flow","parameter/bridge");
-        optgroup->append_single_option_line("thick_bridges","parameter/bridge");
+        //optgroup->append_single_option_line("is_infill_first","parameter/quality-advance-settings");
+        //optgroup->append_single_option_line("bridge_flow","parameter/bridge");
+        //optgroup->append_single_option_line("thick_bridges","parameter/bridge");
         optgroup->append_single_option_line("print_flow_ratio");
         optgroup->append_single_option_line("top_solid_infill_flow_ratio","parameter/quality-advance-settings");
         optgroup->append_single_option_line("initial_layer_flow_ratio","parameter/quality-advance-settings");
@@ -2223,13 +2223,13 @@ void TabPrint::build()
 
         optgroup = page->new_optgroup(L("Sparse infill"), L"param_infill");
         optgroup->append_single_option_line("sparse_infill_density");
-        optgroup->append_single_option_line("sparse_infill_pattern", "fill-patterns#infill types and their properties of sparse");
-        optgroup->append_single_option_line("skin_infill_density");
-        optgroup->append_single_option_line("skeleton_infill_density");
-        optgroup->append_single_option_line("infill_lock_depth");
-        optgroup->append_single_option_line("skin_infill_depth");
-        optgroup->append_single_option_line("skin_infill_line_width", "parameter/line-width");
-        optgroup->append_single_option_line("skeleton_infill_line_width", "parameter/line-width");
+//        optgroup->append_single_option_line("sparse_infill_pattern", "fill-patterns#infill types and their properties of sparse");
+//        optgroup->append_single_option_line("skin_infill_density");
+//        optgroup->append_single_option_line("skeleton_infill_density");
+//        optgroup->append_single_option_line("infill_lock_depth");
+//        optgroup->append_single_option_line("skin_infill_depth");
+//        optgroup->append_single_option_line("skin_infill_line_width", "parameter/line-width");
+//        optgroup->append_single_option_line("skeleton_infill_line_width", "parameter/line-width");
 
         optgroup->append_single_option_line("symmetric_infill_y_axis");
         optgroup->append_single_option_line("infill_shift_step");
@@ -2242,7 +2242,7 @@ void TabPrint::build()
         optgroup = page->new_optgroup(L("Advanced"), L"param_advanced");
         optgroup->append_single_option_line("infill_wall_overlap","parameter/strength-advance-settings");
         optgroup->append_single_option_line("infill_direction","parameter/strength-advance-settings");
-        optgroup->append_single_option_line("bridge_angle","parameter/strength-advance-settings");
+        //optgroup->append_single_option_line("bridge_angle","parameter/strength-advance-settings");
         optgroup->append_single_option_line("minimum_sparse_infill_area","parameter/strength-advance-settings");
         optgroup->append_single_option_line("infill_combination","parameter/strength-advance-settings");
         optgroup->append_single_option_line("detect_narrow_internal_solid_infill","parameter/strength-advance-settings");
@@ -2306,57 +2306,57 @@ void TabPrint::build()
         optgroup->append_single_option_line("max_volumetric_extrusion_rate_slope_negative");
 #endif /* HAS_PRESSURE_EQUALIZER */
 
-    page = add_options_page(L("Support"), "support");
-        optgroup = page->new_optgroup(L("Support"), L"param_support");
-        optgroup->append_single_option_line("enable_support", "support");
-        optgroup->append_single_option_line("support_type", "support#support-types");
-        optgroup->append_single_option_line("support_style", "support#support-styles");
-        optgroup->append_single_option_line("support_threshold_angle", "support#threshold-angle");
-        optgroup->append_single_option_line("support_on_build_plate_only");
-        optgroup->append_single_option_line("support_critical_regions_only");
-        optgroup->append_single_option_line("support_remove_small_overhang");
-        //optgroup->append_single_option_line("enforce_support_layers");
-
-        optgroup = page->new_optgroup(L("Raft"), L"param_raft");
-        optgroup->append_single_option_line("raft_layers");
-        optgroup->append_single_option_line("raft_contact_distance");
-
-        optgroup = page->new_optgroup(L("Support filament"), L"param_support_filament");
-        optgroup->append_single_option_line("support_filament", "support#support-filament");
-        optgroup->append_single_option_line("support_interface_filament", "support#support-filament");
-        optgroup->append_single_option_line("support_interface_not_for_body", "support#support-filament");
-
-        //optgroup = page->new_optgroup(L("Options for support material and raft"));
-
-        //BBS
-        optgroup = page->new_optgroup(L("Advanced"), L"param_advanced");
-        optgroup->append_single_option_line("raft_first_layer_density");   // not only for raft, but for support too
-        optgroup->append_single_option_line("raft_first_layer_expansion"); // not only for raft, but for support too
-        optgroup->append_single_option_line("tree_support_wall_count");
-        optgroup->append_single_option_line("support_top_z_distance", "support#top-z-distance");
-        optgroup->append_single_option_line("support_bottom_z_distance", "support#bottom-z-distance");
-        optgroup->append_single_option_line("support_base_pattern", "support#base-pattern");
-        optgroup->append_single_option_line("support_base_pattern_spacing", "support#base-pattern");
-        optgroup->append_single_option_line("support_angle");
-        optgroup->append_single_option_line("support_interface_top_layers", "support#base-pattern");
-        optgroup->append_single_option_line("support_interface_bottom_layers", "support#base-pattern");
-        optgroup->append_single_option_line("support_interface_pattern", "support#base-pattern");
-        optgroup->append_single_option_line("support_interface_spacing", "support#base-pattern");
-        optgroup->append_single_option_line("support_bottom_interface_spacing");
-        optgroup->append_single_option_line("support_expansion", "support#base-pattern");
-        //optgroup->append_single_option_line("support_interface_loop_pattern");
-
-        optgroup->append_single_option_line("support_object_xy_distance", "support");
-        optgroup->append_single_option_line("support_object_first_layer_gap", "support");
-        optgroup->append_single_option_line("bridge_no_support", "support#base-pattern");
-        optgroup->append_single_option_line("max_bridge_length", "support#tree-support-only-options");
-        optgroup->append_single_option_line("independent_support_layer_height", "support");
-
-        optgroup = page->new_optgroup(L("Tree Support"), L"param_advanced");
-        optgroup->append_single_option_line("tree_support_branch_distance", "support#tree-support-only-options");
-        optgroup->append_single_option_line("tree_support_branch_diameter", "support#tree-support-only-options");
-        optgroup->append_single_option_line("tree_support_branch_angle", "support#tree-support-only-options");
-        optgroup->append_single_option_line("tree_support_branch_diameter_angle", "support#tree-support-only-options");
+//    page = add_options_page(L("Support"), "support");
+//        optgroup = page->new_optgroup(L("Support"), L"param_support");
+//        optgroup->append_single_option_line("enable_support", "support");
+//        optgroup->append_single_option_line("support_type", "support#support-types");
+//        optgroup->append_single_option_line("support_style", "support#support-styles");
+//        optgroup->append_single_option_line("support_threshold_angle", "support#threshold-angle");
+//        optgroup->append_single_option_line("support_on_build_plate_only");
+//        optgroup->append_single_option_line("support_critical_regions_only");
+//        optgroup->append_single_option_line("support_remove_small_overhang");
+//        //optgroup->append_single_option_line("enforce_support_layers");
+//
+//        optgroup = page->new_optgroup(L("Raft"), L"param_raft");
+//        optgroup->append_single_option_line("raft_layers");
+//        optgroup->append_single_option_line("raft_contact_distance");
+//
+//        optgroup = page->new_optgroup(L("Support filament"), L"param_support_filament");
+//        optgroup->append_single_option_line("support_filament", "support#support-filament");
+//        optgroup->append_single_option_line("support_interface_filament", "support#support-filament");
+//        optgroup->append_single_option_line("support_interface_not_for_body", "support#support-filament");
+//
+//        //optgroup = page->new_optgroup(L("Options for support material and raft"));
+//
+//        //BBS
+//        optgroup = page->new_optgroup(L("Advanced"), L"param_advanced");
+//        optgroup->append_single_option_line("raft_first_layer_density");   // not only for raft, but for support too
+//        optgroup->append_single_option_line("raft_first_layer_expansion"); // not only for raft, but for support too
+//        optgroup->append_single_option_line("tree_support_wall_count");
+//        optgroup->append_single_option_line("support_top_z_distance", "support#top-z-distance");
+//        optgroup->append_single_option_line("support_bottom_z_distance", "support#bottom-z-distance");
+//        optgroup->append_single_option_line("support_base_pattern", "support#base-pattern");
+//        optgroup->append_single_option_line("support_base_pattern_spacing", "support#base-pattern");
+//        optgroup->append_single_option_line("support_angle");
+//        optgroup->append_single_option_line("support_interface_top_layers", "support#base-pattern");
+//        optgroup->append_single_option_line("support_interface_bottom_layers", "support#base-pattern");
+//        optgroup->append_single_option_line("support_interface_pattern", "support#base-pattern");
+//        optgroup->append_single_option_line("support_interface_spacing", "support#base-pattern");
+//        optgroup->append_single_option_line("support_bottom_interface_spacing");
+//        optgroup->append_single_option_line("support_expansion", "support#base-pattern");
+//        //optgroup->append_single_option_line("support_interface_loop_pattern");
+//
+//        optgroup->append_single_option_line("support_object_xy_distance", "support");
+//        optgroup->append_single_option_line("support_object_first_layer_gap", "support");
+//        optgroup->append_single_option_line("bridge_no_support", "support#base-pattern");
+//        optgroup->append_single_option_line("max_bridge_length", "support#tree-support-only-options");
+//        optgroup->append_single_option_line("independent_support_layer_height", "support");
+//
+//        optgroup = page->new_optgroup(L("Tree Support"), L"param_advanced");
+//        optgroup->append_single_option_line("tree_support_branch_distance", "support#tree-support-only-options");
+//        optgroup->append_single_option_line("tree_support_branch_diameter", "support#tree-support-only-options");
+//        optgroup->append_single_option_line("tree_support_branch_angle", "support#tree-support-only-options");
+//        optgroup->append_single_option_line("tree_support_branch_diameter_angle", "support#tree-support-only-options");
 
     page = add_options_page(L("Others"), "advanced");
         optgroup = page->new_optgroup(L("Bed adhension"), L"param_adhension");

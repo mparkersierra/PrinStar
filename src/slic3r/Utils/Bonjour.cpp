@@ -629,8 +629,8 @@ void Bonjour::priv::lookup_perform()
 	auto self = this;
 
 	try {
-		boost::asio::io_service io_service;
-		udp::socket socket(io_service);
+        boost::asio::io_context io_context;
+        udp::socket socket(io_context);
 		socket.open(udp::v4());
 		socket.set_option(udp::socket::reuse_address(true));
 		udp::endpoint mcast(BonjourRequest::MCAST_IP4, BonjourRequest::MCAST_PORT);
@@ -638,7 +638,7 @@ void Bonjour::priv::lookup_perform()
 
 		bool expired = false;
 		bool retry = false;
-		asio::deadline_timer timer(io_service);
+        asio::deadline_timer timer(io_context);
 		retries--;
 		std::function<void(const error_code &)> timer_handler = [&](const error_code &error) {
 			if (retries == 0 || error) {
@@ -663,7 +663,7 @@ void Bonjour::priv::lookup_perform()
 		};
 		socket.async_receive_from(asio::buffer(buffer, buffer.size()), recv_from, recv_handler);
 
-		while (io_service.run_one()) {
+        while (io_context.run_one()) {
 			if (expired) {
 				socket.cancel();
 			} else if (retry) {

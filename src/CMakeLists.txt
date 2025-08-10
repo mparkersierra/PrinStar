@@ -113,6 +113,28 @@ else ()
     add_executable(BambuStudio BambuStudio.cpp BambuStudio.hpp)
 endif ()
 
+# macOS: rename the .app on disk and the Dock/Finder name
+if(APPLE)
+  # after add_executable(BambuStudio ...)
+  set_target_properties(BambuStudio PROPERTIES
+    OUTPUT_NAME "PrinStar"                 # PrinStar.app on disk
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "PrinStar"   # Finder/Dock label
+  )
+endif()
+
+# Windows: rename the GUI wrapper exe users run
+if(WIN32)
+  set_target_properties(BambuStudio_app_gui PROPERTIES OUTPUT_NAME "prinstar")
+endif()
+
+# Linux (and other UNIX, not Apple): rename the binary & helper var
+if(UNIX AND NOT APPLE)
+  set_target_properties(BambuStudio PROPERTIES OUTPUT_NAME "prinstar")
+  set(SLIC3R_APP_CMD "prinstar")
+endif()
+
+
 if (MINGW)
     target_link_options(BambuStudio PUBLIC "-Wl,-allow-multiple-definition")
     set_target_properties(BambuStudio PROPERTIES PREFIX "")
@@ -120,8 +142,8 @@ endif (MINGW)
 
 if (NOT WIN32 AND NOT APPLE)
     # Binary name on unix like systems (Linux, Unix)
-    set_target_properties(BambuStudio PROPERTIES OUTPUT_NAME "bambu-studio")
-    set(SLIC3R_APP_CMD "bambu-studio")
+    set_target_properties(BambuStudio PROPERTIES OUTPUT_NAME "prinstar")
+    set(SLIC3R_APP_CMD "prinstar")
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/platform/unix/BuildLinuxImage.sh.in ${CMAKE_CURRENT_BINARY_DIR}/BuildLinuxImage.sh @ONLY)
 endif ()
 
@@ -174,7 +196,7 @@ if (WIN32)
     endif()
     target_compile_definitions(BambuStudio_app_gui PRIVATE -DSLIC3R_WRAPPER_NOCONSOLE)
     add_dependencies(BambuStudio_app_gui BambuStudio)
-    set_target_properties(BambuStudio_app_gui PROPERTIES OUTPUT_NAME "bambu-studio")
+    set_target_properties(BambuStudio_app_gui PROPERTIES OUTPUT_NAME "prinstar")
     target_link_libraries(BambuStudio_app_gui PRIVATE boost_headeronly)
 endif ()
 
@@ -248,16 +270,25 @@ else ()
         set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/../resources")
     endif ()
     if (CMAKE_MACOSX_BUNDLE)
-        set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/${BIN_CONF_DIR}/BambuStudio.app/Contents/Resources")
-        set(MACOSX_BUNDLE_ICON_FILE Icon.icns)
-        set(MACOSX_BUNDLE_BUNDLE_NAME "Bambu Studio")
-        set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${SLIC3R_VERSION})
-        set(MACOSX_BUNDLE_COPYRIGHT "Copyright(C) 2021-2023 Lunkuo All Rights Reserved")
+      set(MACOSX_BUNDLE_ICON_FILE Icon.icns)
+      set(MACOSX_BUNDLE_BUNDLE_NAME "PrinStar")
+      set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${SLIC3R_VERSION})
+      set(MACOSX_BUNDLE_COPYRIGHT "Copyright(C) 2021-2023 Lunkuo All Rights Reserved")
     endif()
+
+    # Resolve the actual bundle’s Resources dir at build time (works for Debug/Release and any OUTPUT_NAME)
+    set(BIN_RESOURCES_DIR
+      "$<IF:$<BOOL:${CMAKE_MACOSX_BUNDLE}>,$<TARGET_FILE_DIR:BambuStudio>/../Resources,${CMAKE_CURRENT_BINARY_DIR}/resources>"
+    )
+
+    # Ensure the folder exists, then refresh the symlink (portable CMake commands)
     add_custom_command(TARGET BambuStudio POST_BUILD
-        COMMAND ln -sfn "${SLIC3R_RESOURCES_DIR}" "${BIN_RESOURCES_DIR}"
-        COMMENT "Symlinking the resources directory into the build tree"
-        VERBATIM)
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${BIN_RESOURCES_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "${BIN_RESOURCES_DIR}"
+      COMMAND ${CMAKE_COMMAND} -E create_symlink "${SLIC3R_RESOURCES_DIR}" "${BIN_RESOURCES_DIR}"
+      COMMENT "Linking resources into the bundle"
+      VERBATIM)
+
     if (UNIX AND NOT APPLE)
         add_custom_command(TARGET BambuStudio POST_BUILD
             COMMAND ln -sfn "zh_cn" "${BIN_RESOURCES_DIR}/i18n/zh_CN"

@@ -1,5 +1,25 @@
+# Compile mac:
+#cmake .. -GXcode -DBBL_RELEASE_TO_PUBLIC=1 -DCMAKE_PREFIX_PATH="/Users/martinparker/PrinterThingy/BambuStudio_dep/usr/local" -DCMAKE_INSTALL_PREFIX="../install_dir" -DCMAKE_BUILD_TYPE=Release -DCMAKE_MACOSX_RPATH=ON -DCMAKE_INSTALL_RPATH="/Users/martinparker/PrinterThingy/BambuStudio_dep/usr/local" -DCMAKE_MACOSX_BUNDLE=on
+
 cmake_minimum_required(VERSION 3.13)
 project(BambuStudio)
+
+# ─── ALWAYS PREFER STATIC LIBRARIES ─────────────────────────────────────────────
+# Turn off shared‐lib builds globally
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Link all deps statically" FORCE)
+
+# Make CMake look for .a before .dylib
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".dylib" CACHE STRING "" FORCE)
+
+# Tell CMake where Homebrew (or your deps folder) puts static libs
+list(APPEND CMAKE_PREFIX_PATH
+  "/opt/homebrew/opt/tbb"      # TBB static (.a must exist here)
+  "/opt/homebrew/opt/icu4c"    # ICU static (.a must exist here)
+  "/opt/homebrew/opt/zlib"     # Zlib static (.a must exist here)
+  "${CMAKE_SOURCE_DIR}/BambuStudio_dep/usr/local"  # your prebuilt deps
+)
+
+
 
 include("version.inc")
 include(GNUInstallDirs)
@@ -55,7 +75,7 @@ if (APPLE)
     if (CMAKE_MACOSX_BUNDLE)
         set(CMAKE_INSTALL_RPATH @executable_path/../Frameworks)
     endif()
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum OS X deployment version" FORCE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum OS X deployment version" FORCE)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CMAKE_INSTALL_RPATH "$ORIGIN")
 endif ()
@@ -357,7 +377,9 @@ endif()
 # boost::process was introduced first in version 1.64.0,
 # boost::beast::detail::base64 was introduced first in version 1.66.0
 set(MINIMUM_BOOST_VERSION "1.66.0")
-set(_boost_components "system;filesystem;thread;log;locale;regex;chrono;atomic;date_time;iostreams")
+set(_boost_components
+  "system;filesystem;thread;log;locale;regex;chrono;atomic;date_time;iostreams;process"
+)
 find_package(Boost ${MINIMUM_BOOST_VERSION} REQUIRED COMPONENTS ${_boost_components})
 
 add_library(boost_libs INTERFACE)
@@ -412,7 +434,34 @@ if(SLIC3R_STATIC)
     set(TBB_STATIC 1)
 endif()
 set(TBB_DEBUG 1)
+set(TBB_DIR        "/opt/homebrew/opt/tbb/lib/cmake/TBB")
 find_package(TBB REQUIRED)
+# ————————————————————————————————————————————————————————————————
+# Force TBB::tbb to use the static .a in /opt/homebrew/opt/tbb/lib
+# (override the imported .dylib location)
+
+# Grab whatever was originally imported (for debugging)
+get_target_property(_orig_tbb_loc TBB::tbb IMPORTED_LOCATION_RELEASE)
+message(STATUS "🏷  TBB::tbb originally points to: ${_orig_tbb_loc}")
+
+# Now override for Release builds
+set_target_properties(TBB::tbb PROPERTIES
+  IMPORTED_LOCATION_RELEASE "/opt/homebrew/opt/tbb/lib/libtbb.a"
+)
+
+# And for Debug builds (Xcode is multi‐config)
+set_target_properties(TBB::tbb PROPERTIES
+  IMPORTED_LOCATION_DEBUG   "/opt/homebrew/opt/tbb/lib/libtbb.a"
+)
+
+message(STATUS "➡️  TBB::tbb now forced to: /opt/homebrew/opt/tbb/lib/libtbb.a")
+# ————————————————————————————————————————————————————————————————
+
+if (TBB_FOUND)
+  # Inspect the imported target's location
+  get_target_property(_tbb_loc TBB::tbb IMPORTED_LOCATION_RELEASE)
+  message(STATUS "👀 TBB::tbb imported from: ${_tbb_loc}")
+endif()
 # include_directories(${TBB_INCLUDE_DIRS})
 # add_definitions(${TBB_DEFINITIONS})
 # if(MSVC)
@@ -716,9 +765,40 @@ function(bambustudio_copy_sos target config postfix output_sos)
     )
 endfunction()
 
+# Force CMake to prefer config‐mode finds and point it at Homebrew’s TBB
+
+list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/tbb")
+#–– Prefer “config mode” when finding packages, and look in Homebrew prefixes
+list(APPEND CMAKE_PREFIX_PATH
+  "/opt/homebrew/opt/icu4c"
+)
+
+
+#── find and link TBB and ICU for the GUI target
+
 # libslic3r, BambuStudio GUI and the BambuStudio executable.
 add_subdirectory(src)
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT BambuStudio_app_gui)
+
+
+find_package(ICU REQUIRED COMPONENTS uc i18n data)
+if (ICU_FOUND)
+  message(STATUS "Found ICU ${ICU_VERSION_STRING} at ${ICU_INCLUDE_DIRS}")
+endif()
+
+#── Finally link all of them into the GUI target
+if(Boost_FOUND AND TBB_FOUND AND ICU_FOUND)
+  target_include_directories(libslic3r_gui
+    PRIVATE
+      ${ICU_INCLUDE_DIRS}
+  )
+  target_link_libraries(libslic3r_gui
+    ${Boost_LIBRARIES}  
+    ICU::uc              # libicuuc
+    ICU::i18n            # libicui18n
+    ICU::data            # libicudata
+  )
+endif()
 
 add_dependencies(gettext_make_pot hintsToPot)
 

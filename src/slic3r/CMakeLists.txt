@@ -676,3 +676,16 @@ endif ()
 
 # Add a definition so that we can tell we are compiling slic3r.
 target_compile_definitions(libslic3r_gui PRIVATE SLIC3R_CURRENTLY_COMPILING_GUI_MODULE)
+
+# — Link Intel TBB for those tbb::detail symbols
+find_package(TBB REQUIRED)
+target_link_libraries(libslic3r_gui
+  TBB::tbb
+)
+
+# — Make sure we link Boost.Process v2 (provides get_shell_category, error categories, etc.)
+find_package(Boost REQUIRED COMPONENTS process)
+target_link_libraries(libslic3r_gui
+  ${Boost_LIBRARIES}
+)
+

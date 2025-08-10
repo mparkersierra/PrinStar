@@ -2082,7 +2082,7 @@ void PrintConfigDef::init_fff_params()
     def->sidetext = "%";
     def->min = 0;
     def->max = 100;
-    def->set_default_value(new ConfigOptionPercent(20));
+    def->set_default_value(new ConfigOptionPercent(30));
 
     def = this->add("sparse_infill_pattern", coEnum);
     def->label = L("Sparse infill pattern");

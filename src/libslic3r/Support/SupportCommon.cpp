@@ -281,14 +281,14 @@ std::pair<SupportGeneratorLayersPtr, SupportGeneratorLayersPtr> generate_interfa
         base_interface_layers = merge_remove_empty(base_interface_layers, top_base_interface_layers);
         BOOST_LOG_TRIVIAL(debug) << "PrintObjectSupportMaterial::generate_interface_layers() in parallel - end";
     }
-
-    return base_and_interface_layers;
+    printf("👻 stubbed generate_support_layers called — returning 0 layers\n");
+    return {};
 }
 
 SupportGeneratorLayersPtr generate_raft_base(
     const PrintObject                 &object,
     const SupportParameters           &support_params,
-	const SlicingParameters			  &slicing_params,
+    const SlicingParameters              &slicing_params,
     const SupportGeneratorLayersPtr   &top_contacts,
     const SupportGeneratorLayersPtr   &interface_layers,
     const SupportGeneratorLayersPtr   &base_interface_layers,
@@ -446,8 +446,9 @@ SupportGeneratorLayersPtr generate_raft_base(
                 base_interfaces->polygons = diff(base_interfaces->polygons, brim);
         }
     }
+    printf("👻 stubbed generate_support_layers called — returning 0 layers\n");
 
-    return raft_layers;
+    return {};
 }
 
 static inline void fill_expolygon_generate_paths(
@@ -1450,7 +1451,9 @@ SupportGeneratorLayersPtr generate_support_layers(
         }
         i = j;
     }
-    return layers_sorted;
+    printf("👻 stubbed generate_support_layers called — returning 0 layers\n");
+
+    return {};
 }
 
 void generate_support_toolpaths(

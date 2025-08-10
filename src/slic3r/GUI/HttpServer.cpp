@@ -3,6 +3,8 @@
 #include "GUI_App.hpp"
 #include "slic3r/Utils/Http.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
+#include <boost/asio/io_context.hpp>
+
 
 namespace Slic3r {
 namespace GUI {
@@ -104,17 +106,15 @@ std::string http_headers::get_response()
 }
 
 
-void accept_and_run(boost::asio::ip::tcp::acceptor& acceptor, boost::asio::io_service& io_service)
+void accept_and_run(boost::asio::ip::tcp::acceptor& acceptor, boost::asio::io_context& io_context)
 {
-    std::shared_ptr<session> sesh = std::make_shared<session>(io_service);
-    acceptor.async_accept(sesh->socket,
-        [sesh, &acceptor, &io_service](const boost::beast::error_code& accept_error)
+    auto sesh = std::make_shared<session>(io_context);\
+    acceptor.async_accept(sesh->socket(),
+        [sesh, &acceptor, &io_context](const boost::beast::error_code& ec)
         {
-            accept_and_run(acceptor, io_service);
-            if (!accept_error)
-            {
+            accept_and_run(acceptor, io_context);
+            if (!ec)
                 session::interact(sesh);
-            }
         });
 }
 
@@ -129,15 +129,16 @@ void HttpServer::start()
     start_http_server = true;
     m_http_server_thread = Slic3r::create_thread(
         [this] {
-            boost::asio::io_service io_service;
+            boost::asio::io_context io_context;
             boost::asio::ip::tcp::endpoint endpoint{ boost::asio::ip::tcp::v4(), LOCALHOST_PORT};
-            boost::asio::ip::tcp::acceptor acceptor { io_service, endpoint};
+            boost::asio::ip::tcp::acceptor acceptor { io_context, endpoint};
             acceptor.listen();
-            accept_and_run(acceptor, io_service);
+            accept_and_run(acceptor, io_context);
             while (start_http_server) {
-                io_service.run();
+                io_context.run();
             }
         });
+
 }
 
 void HttpServer::stop()

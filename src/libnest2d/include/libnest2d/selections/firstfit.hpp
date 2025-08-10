@@ -65,7 +65,10 @@ public:
 #ifdef SVGTOOLS_HPP
         svg::SVGWriter<RawShape> svgwriter;
         std::for_each(first, last, [this,&svgwriter](Item &itm) { svgwriter.writeShape(itm, "none", "blue"); });
-        svgwriter.save(boost::filesystem::path("SVG") / "all_items.svg");
+        svgwriter.save(
+            (boost::filesystem::path("SVG") / "all_items.svg")
+              .string()
+        );
 #endif
 
         std::function<bool(Item& i1, Item& i2)> sortfunc;

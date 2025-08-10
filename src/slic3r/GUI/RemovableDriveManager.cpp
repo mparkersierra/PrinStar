@@ -22,9 +22,12 @@
 #include <pwd.h>
 #include <boost/filesystem.hpp>
 #include <boost/system/error_code.hpp>
-#include <boost/filesystem/convenience.hpp>
-#include <boost/process.hpp>
+#include <boost/process/v1/child.hpp>
+#include <boost/process/v1/io.hpp>
+#include <boost/process/v1/search_path.hpp>
 #endif
+
+namespace bp = boost::process::v1;
 
 namespace Slic3r {
 namespace GUI { 
@@ -202,8 +205,7 @@ namespace search_for_drives_internal
 				stat(path.c_str(), &buf);
 				uid_t uid = buf.st_uid;
 				if (getuid() == uid)
-					out.emplace_back(DriveData{ boost::filesystem::basename(boost::filesystem::path(path)), path });
-			}
+                    out.emplace_back(DriveData{ boost::filesystem::path(path).stem().string(), path });			}
 		}
 	}
 
@@ -303,15 +305,15 @@ void RemovableDriveManager::eject_drive()
 		// but neither triggers "succesful safe removal messege"
 		
 		BOOST_LOG_TRIVIAL(info) << "Ejecting started";
-		boost::process::ipstream istd_err;
-    	boost::process::child child(
-#if __APPLE__		
-			boost::process::search_path("diskutil"), "eject", correct_path.c_str(), (boost::process::std_out & boost::process::std_err) > istd_err);
+		bp::ipstream istd_err;
+    	bp::child child(
+#if __APPLE__
+			bp::search_path("diskutil"), "eject", correct_path.c_str(), (bp::std_out & bp::std_err) > istd_err);
 		//Another option how to eject at mac. Currently not working.
 		//used insted of system() command;
 		//this->eject_device(correct_path);
 #else
-    		boost::process::search_path("umount"), correct_path.c_str(), (boost::process::std_out & boost::process::std_err) > istd_err);
+    		bp::search_path("umount"), correct_path.c_str(), (bp::std_out & bp::std_err) > istd_err);
 #endif
 		std::string line;
 		while (child.running() && std::getline(istd_err, line)) {

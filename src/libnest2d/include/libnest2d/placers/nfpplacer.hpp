@@ -1104,7 +1104,10 @@ private:
         ss.str("");
         ss << "items.size=" << items_.size() << "-merged_pile.size=" << merged_pile_.size();
         svgwriter.draw_text(20, 40, ss.str(), "blue", 10);
-        svgwriter.save(boost::filesystem::path("SVG") / ("plate_" + std::to_string(plate_id) + "_" + ss.str() + "_" + item.name + "_canPack=" + std::to_string(can_pack) + ".svg"));
+        auto out_path = boost::filesystem::path("SVG")
+                      / ("plate_" + std::to_string(plate_id) + "_" + ss.str()
+                         + "_" + item.name + "_canPack=" + std::to_string(can_pack) + ".svg");
+        svgwriter.save(out_path.string());
     }
 
     RawShape box2RawShape(Box& bbin)

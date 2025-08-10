@@ -8,19 +8,29 @@
 #include "MsgDialog.hpp"
 #include "DownloadProgressDialog.hpp"
 
-#include <boost/filesystem/string_file.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
+#include <fstream>
+#include <sstream>
 #include <boost/lexical_cast.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/nowide/cstdio.hpp>
 #include <boost/nowide/utf8_codecvt.hpp>
 #undef pid_t
-#include <boost/process.hpp>
+#include <boost/process/v1/pipe.hpp>
+#include <boost/process/v1/child.hpp>
+#include <boost/process/v1/io.hpp>
+#include <boost/process/v1/search_path.hpp>
+#include <boost/process/v1/start_dir.hpp>    // defines bp::start_dir
+#include <boost/process/v1/handles.hpp>      // defines bp::limit_handles
+
 #ifdef __WIN32__
 #include <boost/process/windows.hpp>
 #else
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #endif
+namespace bp = boost::process::v1;
 #ifdef __APPLE__
 #include <ApplicationServices/ApplicationServices.h>
 #endif
@@ -832,11 +842,17 @@ bool MediaPlayCtrl::start_stream_service(bool *need_install)
     file_url2 = wxURI(file_url2).BuildURI();
     try {
         std::string configs;
-        boost::filesystem::load_string_file(file_ff_cfg, configs);
+        {
+            std::ifstream ifs(file_ff_cfg);
+            std::ostringstream oss;
+            oss << ifs.rdbuf();
+            configs = oss.str();
+        }
         std::vector<std::string> configss;
         boost::algorithm::split(configss, configs, boost::algorithm::is_any_of("\r\n"));
         configss.erase(std::remove(configss.begin(), configss.end(), std::string()), configss.end());
-        boost::process::pipe intermediate;
+        
+        bp::pipe intermediate;
         boost::filesystem::path start_dir(boost::filesystem::path(data_dir()) / "plugins");
 #ifdef __WXMSW__
         auto plugins_dir = boost::nowide::widen(data_dir()) + L"\\plugins\\";
@@ -846,17 +862,33 @@ bool MediaPlayCtrl::start_stream_service(bool *need_install)
             if (!boost::filesystem::exists(file_dll) || boost::filesystem::last_write_time(file_dll) != boost::filesystem::last_write_time(file_dll2))
                 boost::filesystem::copy_file(file_dll2, file_dll, boost::filesystem::copy_option::overwrite_if_exists);
         }
-        boost::process::child process_source(file_source, file_url2.ToStdWstring(), boost::process::start_dir(tools_dir),
-                                             boost::process::windows::create_no_window,
-                                             boost::process::std_out > intermediate, boost::process::limit_handles);
-        boost::process::child process_ffmpeg(file_ffmpeg, configss, boost::process::windows::create_no_window,
-                                             boost::process::std_in < intermediate, boost::process::limit_handles);
+        bp::child process_source(
+            file_source, file_url2.ToStdWstring(),
+            boost::process::windows::create_no_window,
+            bp::std_out > intermediate,
+            bp::limit_handles);
+
+        bp::child process_ffmpeg(
+            file_ffmpeg, configss,
+            boost::process::windows::create_no_window,
+            bp::std_in < intermediate,
+            bp::limit_handles);
+
 #else
         boost::filesystem::permissions(file_source, boost::filesystem::owner_exe | boost::filesystem::add_perms);
         boost::filesystem::permissions(file_ffmpeg, boost::filesystem::owner_exe | boost::filesystem::add_perms);
-        boost::process::child process_source(file_source, file_url2.data().AsInternal(), boost::process::start_dir(start_dir),
-                                             boost::process::std_out > intermediate, boost::process::limit_handles);
-        boost::process::child process_ffmpeg(file_ffmpeg, configss, boost::process::std_in < intermediate, boost::process::limit_handles);
+        bp::child process_source(
+            file_source,
+            file_url2.data().AsInternal(),
+            bp::start_dir(start_dir),
+            bp::std_out > intermediate,
+            bp::limit_handles);
+
+        bp::child process_ffmpeg(
+            file_ffmpeg, configss,
+            bp::std_in < intermediate,
+            bp::limit_handles);
+
 #endif
         process_source.detach();
         process_ffmpeg.detach();

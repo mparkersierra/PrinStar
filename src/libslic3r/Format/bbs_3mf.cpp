@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <iomanip>
 
+#include <boost/nowide/fstream.hpp>
 #include <boost/assign.hpp>
 #include <boost/bimap.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -25,9 +26,10 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/string_file.hpp>
+#include <boost/filesystem/fstream.hpp>  // defines filesystem ifstream/ofstream
+#include <fstream>
+#include <sstream>
 #include <boost/lexical_cast.hpp>
-#include <boost/nowide/fstream.hpp>
 #include <boost/nowide/cstdio.hpp>
 #include <boost/spirit/include/karma.hpp>
 #include <boost/spirit/include/qi_int.hpp>
@@ -1317,12 +1319,19 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
             m_backup_path = filename.substr(0, filename.size() - 5);
             model.set_backup_path(m_backup_path);
             try {
-                if (boost::filesystem::exists(model.get_backup_path() + "/origin.txt"))
-                    boost::filesystem::load_string_file(model.get_backup_path() + "/origin.txt", m_origin_file);
+                if (boost::filesystem::exists(model.get_backup_path() + "/origin.txt")) {
+                    std::ifstream ifs(model.get_backup_path() + "/origin.txt", std::ios::binary);
+                    std::ostringstream oss;
+                    oss << ifs.rdbuf();
+                    m_origin_file = oss.str();
+                }
+
             } catch (...) {}
-            boost::filesystem::save_string_file(
-                model.get_backup_path() + "/lock.txt",
-                boost::lexical_cast<std::string>(get_current_pid()));
+            {
+                std::ofstream ofs(model.get_backup_path() + "/lock.txt", std::ios::binary);
+                ofs << boost::lexical_cast<std::string>(get_current_pid());
+            }
+
         }
         else {
             m_backup_path = model.get_backup_path();
@@ -1335,7 +1344,10 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
             file_version = *m_bambuslicer_generator_version;
         // save for restore
         if (result && m_load_aux && !m_load_restore) {
-            boost::filesystem::save_string_file(model.get_backup_path() + "/origin.txt", filename);
+            {
+                std::ofstream ofs(model.get_backup_path() + "/origin.txt", std::ios::binary);
+                ofs << filename;
+            }
         }
         if (m_load_restore && !result) // not clear failed backup data for later analyze
             model.set_backup_path("detach");
@@ -2935,7 +2947,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                     for (unsigned int i=0; i<object_data_points.size(); i+=3)
                     sla_support_points.emplace_back(float(std::atof(object_data_points[i+0].c_str())),
                                                     float(std::atof(object_data_points[i+1].c_str())),
-													float(std::atof(object_data_points[i+2].c_str())),
+                                                    float(std::atof(object_data_points[i+2].c_str())),
                                                     0.4f,
                                                     false);
                 }
@@ -2945,7 +2957,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                                                     float(std::atof(object_data_points[i+1].c_str())),
                                                     float(std::atof(object_data_points[i+2].c_str())),
                                                     float(std::atof(object_data_points[i+3].c_str())),
-													//FIXME storing boolean as 0 / 1 and importing it as float.
+                                                    //FIXME storing boolean as 0 / 1 and importing it as float.
                                                     std::abs(std::atof(object_data_points[i+4].c_str()) - 1.) < EPSILON);
                 }
 
@@ -4619,7 +4631,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
             }
 
             Transform3d volume_matrix_to_object = Transform3d::Identity();
-            bool        has_transform 		    = false;
+            bool        has_transform             = false;
             int         shared_mesh_id          = object_id.second;
             if (volume_data)
             {
@@ -4628,7 +4640,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                 for (const Metadata& metadata : volume_data->metadata) {
                     if (metadata.key == MATRIX_KEY) {
                         volume_matrix_to_object = Slic3r::Geometry::transform3d_from_string(metadata.value);
-                        has_transform 			= ! volume_matrix_to_object.isApprox(Transform3d::Identity(), 1e-10);
+                        has_transform             = ! volume_matrix_to_object.isApprox(Transform3d::Identity(), 1e-10);
                         found_count++;
                     }
                     else if (metadata.key == MESH_SHARED_KEY){
@@ -4779,8 +4791,8 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                 if (metadata.key == NAME_KEY)
                     volume->name = metadata.value;
                 //else if ((metadata.key == MODIFIER_KEY) && (metadata.value == "1"))
-				//	volume->set_type(ModelVolumeType::PARAMETER_MODIFIER);
-				//for old format
+                //    volume->set_type(ModelVolumeType::PARAMETER_MODIFIER);
+                //for old format
                 else if ((metadata.key == VOLUME_TYPE_KEY) || (metadata.key == PART_TYPE_KEY))
                     volume->set_type(ModelVolume::type_from_string(metadata.value));
                 else if (metadata.key == SOURCE_FILE_KEY)
@@ -4834,12 +4846,12 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
             }
 
             Transform3d volume_matrix_to_object = Transform3d::Identity();
-            bool        has_transform 		    = false;
+            bool        has_transform             = false;
             // extract the volume transformation from the volume's metadata, if present
             for (const Metadata& metadata : volume_data.metadata) {
                 if (metadata.key == MATRIX_KEY) {
                     volume_matrix_to_object = Slic3r::Geometry::transform3d_from_string(metadata.value);
-                    has_transform 			= ! volume_matrix_to_object.isApprox(Transform3d::Identity(), 1e-10);
+                    has_transform             = ! volume_matrix_to_object.isApprox(Transform3d::Identity(), 1e-10);
                     break;
                 }
             }
@@ -4896,7 +4908,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
             if (triangle_mesh.volume() < 0)
                 triangle_mesh.flip_triangles();
 
-			ModelVolume* volume = object.add_volume(std::move(triangle_mesh));
+            ModelVolume* volume = object.add_volume(std::move(triangle_mesh));
             // stores the volume matrix taken from the metadata, if present
             if (has_transform)
                 volume->source.transform = Slic3r::Geometry::Transformation(volume_matrix_to_object);
@@ -4929,8 +4941,8 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                 if (metadata.key == NAME_KEY)
                     volume->name = metadata.value;
                 //else if ((metadata.key == MODIFIER_KEY) && (metadata.value == "1"))
-				//	volume->set_type(ModelVolumeType::PARAMETER_MODIFIER);
-				//for old format
+                //    volume->set_type(ModelVolumeType::PARAMETER_MODIFIER);
+                //for old format
                 else if ((metadata.key == VOLUME_TYPE_KEY) || (metadata.key == PART_TYPE_KEY))
                     volume->set_type(ModelVolume::type_from_string(metadata.value));
                 else if (metadata.key == SOURCE_FILE_KEY)
@@ -5646,7 +5658,10 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                 return false;
             }
             if (!(store_params.strategy & SaveStrategy::Silence))
-                boost::filesystem::save_string_file(store_params.model->get_backup_path() + "/origin.txt", filename);
+            {
+                std::ofstream ofs(store_params.model->get_backup_path() + "/origin.txt", std::ios::binary);
+                ofs << filename;
+            }
         }
         return result;
     }
@@ -6888,8 +6903,8 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
             if (m_share_mesh && volume_id == 0)
                 continue;
 
-			//if (!volume->mesh().stats().repaired())
-			//	throw Slic3r::FileIOError("store_3mf() requires repair()");
+            //if (!volume->mesh().stats().repaired())
+            //    throw Slic3r::FileIOError("store_3mf() requires repair()");
 
             const indexed_triangle_set &its = volume->mesh().its;
             if (its.vertices.empty()) {
@@ -7411,7 +7426,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         std::stringstream stream;
         // Store mesh transformation in full precision, as the volumes are stored transformed and they need to be transformed back
         // when loaded as accurately as possible.
-		stream << std::setprecision(std::numeric_limits<double>::max_digits10);
+        stream << std::setprecision(std::numeric_limits<double>::max_digits10);
         stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
         stream << "<" << CONFIG_TAG << ">\n";
 
@@ -7804,7 +7819,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         std::stringstream stream;
         // Store mesh transformation in full precision, as the volumes are stored transformed and they need to be transformed back
         // when loaded as accurately as possible.
-		stream << std::setprecision(std::numeric_limits<double>::max_digits10);
+        stream << std::setprecision(std::numeric_limits<double>::max_digits10);
         stream << std::setiosflags(std::ios::fixed) << std::setprecision(2);
         stream << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
         stream << "<" << CONFIG_TAG << ">\n";
@@ -8627,7 +8642,13 @@ bool has_restore_data(std::string & path, std::string& origin)
     }
     if (boost::filesystem::exists(path + "/lock.txt")) {
         std::string pid;
-        boost::filesystem::load_string_file(path + "/lock.txt", pid);
+        {
+            std::ifstream ifs(path + "/lock.txt", std::ios::binary);
+            std::ostringstream oss;
+            oss << ifs.rdbuf();
+            pid = oss.str();
+        }
+
         try {
             if (get_process_name(boost::lexical_cast<int>(pid)) ==
                 get_process_name(0)) {
@@ -8644,7 +8665,13 @@ bool has_restore_data(std::string & path, std::string& origin)
         return false;
     try {
         if (boost::filesystem::exists(path + "/origin.txt"))
-            boost::filesystem::load_string_file(path + "/origin.txt", origin);
+        {
+            std::ifstream ifs(path + "/origin.txt", std::ios::binary);
+            std::ostringstream oss;
+            oss << ifs.rdbuf();
+            origin = oss.str();
+        }
+            
     }
     catch (...) {
     }

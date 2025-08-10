@@ -11,6 +11,8 @@
 #include <boost/nowide/convert.hpp>
 #include <boost/nowide/cenv.hpp>
 #include <boost/nowide/fstream.hpp>
+#include <boost/process/v1/child.hpp>
+#include <boost/process/v1/io.hpp>
 
 // BBS
 #include <iostream>
@@ -151,7 +153,7 @@ static int run_script(const std::string &script, const std::string &gcode, std::
 #include <sstream>
 #include <boost/process.hpp>
 
-namespace process = boost::process;
+namespace process = boost::process::v1;
 
 static int run_script(const std::string &script, const std::string &gcode, std::string &std_err)
 {

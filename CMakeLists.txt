@@ -9,7 +9,7 @@ project(BambuStudio)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Link all deps statically" FORCE)
 
 # Make CMake look for .a before .dylib
-set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".dylib" CACHE STRING "" FORCE)
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".dylib" ".tbd" CACHE STRING "" FORCE)
 
 # Tell CMake where Homebrew (or your deps folder) puts static libs
 list(APPEND CMAKE_PREFIX_PATH

@@ -1,9 +1,9 @@
 {
     "type": "filament",
-    "name": "Bambu PLA Tough+ @BBL H2D 0.2 nozzle",
-    "inherits": "Bambu PLA Tough+ @base",
+    "name": "Bambu PLA Glow @BBL H2D 0.2 nozzle",
+    "inherits": "Bambu PLA Glow @base",
     "from": "system",
-    "setting_id": "GFSA10_04",
+    "setting_id": "GFSA12_07",
     "instantiation": "true",
     "filament_deretraction_speed": [
         "nil",
@@ -26,8 +26,8 @@
         "nil"
     ],
     "filament_max_volumetric_speed": [
-        "2",
-        "2"
+        "1",
+        "1"
     ],
     "filament_ramming_volumetric_speed": [
         "-1",
@@ -89,45 +89,17 @@
         "0",
         "0"
     ],
-    "filament_enable_overhang_speed": [
-        "1",
-        "1"
-    ],
-    "filament_overhang_1_4_speed": [
-        "0",
-        "0"
-    ],
-    "filament_overhang_2_4_speed": [
-        "50",
-        "50"
-    ],
-    "filament_overhang_3_4_speed": [
-        "30",
-        "30"
-    ],
-    "filament_overhang_4_4_speed": [
-        "10",
-        "10"
-    ],
-    "filament_overhang_totally_speed": [
-        "10",
-        "10"
-    ],
     "long_retractions_when_ec": [
         "1",
         "1"
     ],
     "nozzle_temperature": [
-        "245",
+        "220",
         "220"
     ],
     "nozzle_temperature_initial_layer": [
-        "245",
+        "220",
         "220"
-    ],
-    "override_process_overhang_speed": [
-        "0",
-        "0"
     ],
     "pre_start_fan_time": [
         "2"

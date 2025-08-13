@@ -22,8 +22,8 @@
 
 namespace Slic3r::GUI {
 
-GLGizmoFdmSupports::GLGizmoFdmSupports(GLCanvas3D& parent, unsigned int sprite_id)
-    : GLGizmoPainterBase(parent, sprite_id), m_current_tool(ImGui::CircleButtonIcon)
+GLGizmoFdmSupports::GLGizmoFdmSupports(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id)
+    : GLGizmoPainterBase(parent, icon_filename, sprite_id), m_current_tool(ImGui::CircleButtonIcon)
 {
     m_tool_type = ToolType::BRUSH;
     m_cursor_type = TriangleSelector::CursorType::CIRCLE;
@@ -111,7 +111,7 @@ bool GLGizmoFdmSupports::on_init()
     m_desc["smart_fill_angle"]      = _L("Smart fill angle");
     m_desc["on_overhangs_only"] = _L("On overhangs only");
 
-    memset(&m_print_instance, 0, sizeof(m_print_instance));
+    memset(&m_print_instance, sizeof(m_print_instance), 0);
     return true;
 }
 
@@ -161,11 +161,6 @@ bool GLGizmoFdmSupports::on_key_down_select_tool_type(int keyCode) {
         break;
     }
     return true;
-}
-
-std::string GLGizmoFdmSupports::get_icon_filename(bool b_dark_mode) const
-{
-    return b_dark_mode ? "toolbar_support_dark.svg" : "toolbar_support.svg";
 }
 
 // BBS
@@ -231,15 +226,7 @@ void GLGizmoFdmSupports::on_set_state()
 void GLGizmoFdmSupports::on_render_input_window(float x, float y, float bottom_limit)
 {
     init_print_instance();
-    if (!m_c) {
-        return;
-    }
-    const auto& p_selection_info = m_c->selection_info();
-    if (!p_selection_info) {
-        return;
-    }
-    const auto& p_model_object = p_selection_info->model_object();
-    if (!p_model_object)
+    if (! m_c->selection_info()->model_object())
         return;
     m_imgui_start_pos[0] = x;
     m_imgui_start_pos[1] = y;
@@ -484,7 +471,7 @@ void GLGizmoFdmSupports::on_render_input_window(float x, float y, float bottom_l
     float get_cur_y = ImGui::GetContentRegionMax().y + ImGui::GetFrameHeight() + y;
     show_tooltip_information(caption_max, x, get_cur_y);
 
-    float f_scale = m_parent.get_main_toolbar_scale();
+    float f_scale =m_parent.get_gizmos_manager().get_layout_scale();
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f * f_scale));
 
     ImGui::SameLine();

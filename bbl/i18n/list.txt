@@ -6,7 +6,6 @@ src/slic3r/GUI/DeviceTab/uiDeviceUpdateVersion.cpp
 src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp
 src/slic3r/GUI/Gizmos/GLGizmoFlatten.cpp
 src/slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.cpp
-src/slic3r/GUI/Gizmos/GLGizmoFuzzySkin.cpp
 src/slic3r/GUI/Gizmos/GLGizmoMove.cpp
 src/slic3r/GUI/Gizmos/GLGizmoRotate.cpp
 src/slic3r/GUI/Gizmos/GLGizmoScale.cpp
@@ -72,7 +71,6 @@ src/slic3r/GUI/BedShapeDialog.cpp
 src/slic3r/GUI/BedShapeDialog.hpp
 src/slic3r/GUI/ConfigManipulation.cpp
 src/slic3r/GUI/DeviceManager.cpp
-src/slic3r/GUI/DeviceErrorDialog.cpp
 src/slic3r/GUI/ExtraRenderers.cpp
 src/slic3r/GUI/Field.cpp
 src/slic3r/GUI/GCodeViewer.cpp
@@ -188,15 +186,6 @@ src/slic3r/GUI/MultiMachinePage.cpp
 src/slic3r/GUI/MultiMachineManagerPage.cpp
 src/slic3r/GUI/MultiTaskManagerPage.cpp
 src/slic3r/GUI/MultiMachine.cpp
-src/slic3r/GUI/UserPresetsDialog.cpp
 src/slic3r/GUI/FilamentMapDialog.cpp
 src/slic3r/GUI/FilamentGroupPopup.cpp
 src/slic3r/GUI/FilamentMapPanel.cpp
-src/slic3r/GUI/PartSkipDialog.cpp
-src/slic3r/GUI/PartSkipDialog.hpp
-src/slic3r/GUI/SkipPartCanvas.cpp
-src/slic3r/GUI/SkipPartCanvas.hpp
-src/slic3r/GUI/FilamentBitmapUtils.cpp
-src/slic3r/GUI/FilamentBitmapUtils.hpp
-src/slic3r/GUI/FilamentPickerDialog.cpp
-src/slic3r/GUI/FilamentPickerDialog.hpp

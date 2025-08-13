@@ -231,7 +231,6 @@ public:
     // BBS
     void                set_color_paint_hidden(const bool hide) const;
     void                set_support_paint_hidden(const bool hide) const;
-    void                set_fuzzy_skin_paint_hidden(const bool hide) const;
     void                set_sinking_hidden(const bool hide) const;
 
     // update extruder in current config
@@ -285,7 +284,9 @@ public:
     bool                is_instance_or_object_selected();
 
     void                load_subobject(ModelVolumeType type, bool from_galery = false);
-    void                load_from_files(const wxArrayString &input_files, ModelObject &model_object, std::vector<ModelVolume *> &added_volumes, ModelVolumeType type, bool from_galery = false);
+    // ! ysFIXME - delete commented code after testing and rename "load_modifier" to something common
+    //void                load_part(ModelObject& model_object, std::vector<ModelVolume*>& added_volumes, ModelVolumeType type, bool from_galery = false);
+    void                load_modifier(const wxArrayString& input_files, ModelObject& model_object, std::vector<ModelVolume*>& added_volumes, ModelVolumeType type, bool from_galery = false);
     void                load_generic_subobject(const std::string& type_name, const ModelVolumeType type);
     void                add_new_model_object_from_old_object();
     void                load_shape_object(const std::string &type_name);
@@ -454,6 +455,8 @@ public:
     void set_extruder_for_selected_items(const int extruder);
     wxDataViewItemArray reorder_volumes_and_get_selection(int obj_idx, std::function<bool(const ModelVolume*)> add_to_selection = nullptr);
     void apply_volumes_order();
+    bool has_paint_on_segmentation();
+
     // BBS
     void on_plate_added(PartPlate* part_plate);
     void on_plate_deleted(int plate_index);

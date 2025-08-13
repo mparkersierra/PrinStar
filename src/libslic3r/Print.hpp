@@ -191,6 +191,8 @@ class ConstSupportLayerPtrsAdaptor : public ConstVectorOfPtrsAdaptor<SupportLaye
     ConstSupportLayerPtrsAdaptor(const SupportLayerPtrs *data) : ConstVectorOfPtrsAdaptor<SupportLayer>(data) {}
 };
 
+class BoundingBoxf3;        // TODO: for temporary constructor parameter
+
 // Single instance of a PrintObject.
 // As multiple PrintObjects may be generated for a single ModelObject (their instances differ in rotation around Z),
 // ModelObject's instancess will be distributed among these multiple PrintObjects.
@@ -253,26 +255,6 @@ public:
         PrintRegion     *region { nullptr };
     };
 
-    struct LayerRangeRegions;
-
-    struct FuzzySkinPaintedRegion
-    {
-        enum class ParentType
-        {
-            VolumeRegion,
-            PaintedRegion
-        };
-
-        ParentType parent_type{ParentType::VolumeRegion};
-        // Index of a parent VolumeRegion or PaintedRegion.
-        int parent{-1};
-        // Pointer to PrintObjectRegions::all_regions.
-        PrintRegion *region{nullptr};
-
-        PrintRegion *parent_print_object_region(const LayerRangeRegions &layer_range) const;
-        int          parent_print_object_region_id(const LayerRangeRegions &layer_range) const;
-    };
-
     // One slice over the PrintObject (possibly the whole PrintObject) and a list of ModelVolumes and their bounding boxes
     // possibly clipped by the layer_height_range.
     struct LayerRangeRegions
@@ -287,7 +269,6 @@ public:
         // Sorted in the order of their source ModelVolumes, thus reflecting the order of region clipping, modifier overrides etc.
         std::vector<VolumeRegion>   volume_regions;
         std::vector<PaintedRegion>  painted_regions;
-        std::vector<FuzzySkinPaintedRegion> fuzzy_skin_painted_regions;
 
         bool has_volume(const ObjectID id) const {
             auto it = lower_bound_by_predicate(this->volumes.begin(), this->volumes.end(), [id](const VolumeExtents &l) { return l.volume_id < id; });
@@ -476,8 +457,6 @@ public:
     bool                        has_support_material()  const { return this->has_support() || this->has_raft(); }
     // Checks if the model object is painted using the multi-material painting gizmo.
     bool                        is_mm_painted()         const { return this->model_object()->is_mm_painted(); }
-    // Checks if the model object is painted using the fuzzy skin painting gizmo.
-    bool                        is_fuzzy_skin_painted() const { return this->model_object()->is_fuzzy_skin_painted(); }
 
     // returns 0-based indices of extruders used to print the object (without brim, support and other helper extrusions)
     std::vector<unsigned int>   object_extruders() const;
@@ -921,8 +900,6 @@ public:
     const ToolOrdering& 		tool_ordering() const { return m_tool_ordering; }
 
     void update_filament_maps_to_config(std::vector<int> f_maps);
-    void apply_config_for_render(const DynamicConfig &config);
-
     // 1 based group ids
     std::vector<int> get_filament_maps() const;
     FilamentMapMode  get_filament_map_mode() const;
@@ -1011,7 +988,6 @@ public:
     Vec2d translate_to_print_space(const Point& point) const;
     static FilamentTempType get_filament_temp_type(const std::string& filament_type);
     static int get_hrc_by_nozzle_type(const NozzleType& type);
-    static std::vector<std::string> get_incompatible_filaments_by_nozzle(const float nozzle_diameter, const std::optional<NozzleVolumeType> nozzle_volume_type = std::nullopt);
     static FilamentCompatibilityType check_multi_filaments_compatibility(const std::vector<std::string>& filament_types);
     // similar to check_multi_filaments_compatibility, but the input is int, and may be negative (means unset)
     static bool is_filaments_compatible(const std::vector<int>& types);

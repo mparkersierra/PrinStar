@@ -173,7 +173,6 @@ class FlushVolPredictor
 public:
     bool predict(const RGB& from,const RGB& to , float& flush);
     FlushVolPredictor(const std::string& data_file);
-    int get_min_flush_volume();
     FlushVolPredictor() = default;
 private:
     uint64_t generate_hash_key(const RGB& from, const RGB& to);
@@ -181,13 +180,6 @@ private:
     std::vector<RGB> m_colors;
     bool m_valid{ false };
 };
-
-int FlushVolPredictor::get_min_flush_volume()
-{
-    if(!m_valid)
-        return std::numeric_limits<int>::max();
-    return static_cast<int>(std::min_element(m_flush_map.begin(), m_flush_map.end(), [](const auto& a, const auto& b) {return a.second < b.second; })->second);
-}
 
 uint64_t FlushVolPredictor::generate_hash_key(const RGB& from, const RGB& to)
 {
@@ -307,24 +299,24 @@ bool FlushVolPredictor::predict(const RGB& from, const RGB& to, float& flush)
 }
 
 
-static std::unordered_map<int, FlushVolPredictor> predictor_instances;
+static std::unordered_map<FlushPredict::FlushMachineType, FlushVolPredictor> predictor_instances;
 
-GenericFlushPredictor::GenericFlushPredictor(const int dataset_value)
+GenericFlushPredictor::GenericFlushPredictor(const MachineType& type)
 {
-    auto iter = predictor_instances.find(dataset_value);
+    auto iter = predictor_instances.find(type);
     if (iter != predictor_instances.end())
         predictor = &iter->second;
     else {
         std::string path = Slic3r::resources_dir();
-        if (dataset_value == 0)
-            path += "/flush/flush_data_standard.txt";
-        else if (dataset_value == 1)
-            path += "/flush/flush_data_dual_standard.txt";
-        else if (dataset_value == 2)
+        if (type == MachineType::DualHighFlow)
             path += "/flush/flush_data_dual_highflow.txt";
-        predictor_instances[dataset_value] = FlushVolPredictor(path);
+        else if (type == MachineType::DualStandard)
+            path += "/flush/flush_data_dual_standard.txt";
+        else
+            path += "/flush/flush_data_standard.txt";
+        predictor_instances[type] = FlushVolPredictor(path);
 
-        predictor = &predictor_instances[dataset_value];
+        predictor = &predictor_instances[type];
     }
 }
 
@@ -334,11 +326,4 @@ bool GenericFlushPredictor::predict(const RGB& from, const RGB& to, float& flush
     if (!predictor)
         return false;
     return predictor->predict(from, to, flush);
-}
-
-int GenericFlushPredictor::get_min_flush_volume()
-{
-    if (!predictor)
-        return std::numeric_limits<int>::max();
-    return predictor->get_min_flush_volume();
 }

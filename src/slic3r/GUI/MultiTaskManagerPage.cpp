@@ -6,7 +6,6 @@
 #include "Widgets/RadioBox.hpp"
 #include <wx/listimpl.cpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include "BBLUtil.hpp"
 
 namespace Slic3r {
 namespace GUI {
@@ -177,7 +176,7 @@ void MultiTaskItem::update_info()
 void MultiTaskItem::onPause()
 {
     if (get_obj() && !get_obj()->can_resume()) {
-        BOOST_LOG_TRIVIAL(info) << "MultiTask: pause current print task dev_id =" << BBLCrossTalk::Crosstalk_DevId(get_obj()->dev_id);
+        BOOST_LOG_TRIVIAL(info) << "MultiTask: pause current print task dev_id =" << get_obj()->dev_id;
         get_obj()->command_task_pause();
         m_button_pause->Hide();
         m_button_resume->Show();
@@ -188,7 +187,7 @@ void MultiTaskItem::onPause()
 void MultiTaskItem::onResume()
 {
     if (get_obj() && get_obj()->can_resume()) {
-        BOOST_LOG_TRIVIAL(info) << "MultiTask: resume current print task dev_id =" << BBLCrossTalk::Crosstalk_DevId(get_obj()->dev_id);
+        BOOST_LOG_TRIVIAL(info) << "MultiTask: resume current print task dev_id =" << get_obj()->dev_id;
         get_obj()->command_task_resume();
         m_button_pause->Show();
         m_button_resume->Hide();
@@ -199,7 +198,7 @@ void MultiTaskItem::onResume()
 void MultiTaskItem::onStop()
 {
     if (get_obj()) {
-        BOOST_LOG_TRIVIAL(info) << "MultiTask: abort current print task dev_id =" << BBLCrossTalk::Crosstalk_DevId(get_obj()->dev_id);
+        BOOST_LOG_TRIVIAL(info) << "MultiTask: abort current print task dev_id =" << get_obj()->dev_id;
         get_obj()->command_task_abort();
         m_button_pause->Hide();
         m_button_resume->Hide();
@@ -535,7 +534,7 @@ LocalTaskManagerPage::LocalTaskManagerPage(wxWindow* parent)
 #ifdef __WINDOWS__
     SetDoubleBuffered(true);
 #endif //__WINDOWS__
-    SetBackgroundColour(wxColour("#EEEEEE"));
+    SetBackgroundColour(wxColour(0xEEEEEE));
     m_main_panel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
     m_main_panel->SetBackgroundColour(*wxWHITE);
     m_main_sizer = new wxBoxSizer(wxVERTICAL);
@@ -897,10 +896,10 @@ CloudTaskManagerPage::CloudTaskManagerPage(wxWindow* parent)
 #ifdef __WINDOWS__
     SetDoubleBuffered(true);
 #endif //__WINDOWS__
-    SetBackgroundColour(wxColour("#EEEEEE"));
+    SetBackgroundColour(wxColour(0xEEEEEE));
     m_sort.set_role(SortItem::SR_SEND_TIME, true);
 
-    SetBackgroundColour(wxColour("#EEEEEE"));
+    SetBackgroundColour(wxColour(0xEEEEEE));
     m_main_panel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
     m_main_panel->SetBackgroundColour(*wxWHITE);
     m_main_sizer = new wxBoxSizer(wxVERTICAL);

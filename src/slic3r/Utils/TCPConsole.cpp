@@ -30,6 +30,11 @@ void TCPConsole::transmit_next_command()
     std::string cmd = m_cmd_queue.front();
     m_cmd_queue.pop_front();
 
+    BOOST_LOG_TRIVIAL(debug) << boost::format("TCPConsole: transmitting '%3%' to %1%:%2%")
+        % m_host_name
+        % m_port_name
+        % cmd;
+
     m_send_buffer = cmd + m_newline;
 
     set_deadline_in(m_write_timeout);
@@ -67,11 +72,22 @@ void TCPConsole::handle_read(
     m_error_code = ec;
 
     if (ec) {
+        BOOST_LOG_TRIVIAL(error) << boost::format("TCPConsole: Can't read from %1%:%2%: %3%")
+            % m_host_name
+            % m_port_name
+            % ec.message();
+
         m_io_context.stop();
     }
     else {
         std::string line = extract_next_line();
         boost::trim(line);
+
+        BOOST_LOG_TRIVIAL(debug) << boost::format("TCPConsole: received '%3%' from %1%:%2%")
+            % m_host_name
+            % m_port_name
+            % line;
+
         boost::to_lower(line);
 
         if (line == m_done_string)
@@ -87,6 +103,11 @@ void TCPConsole::handle_write(
 {
     m_error_code = ec;
     if (ec) {
+        BOOST_LOG_TRIVIAL(error) << boost::format("TCPConsole: Can't write to %1%:%2%: %3%")
+            % m_host_name
+            % m_port_name
+            % ec.message();
+
         m_io_context.stop();
     }
     else {
@@ -99,10 +120,19 @@ void TCPConsole::handle_connect(const boost::system::error_code& ec)
     m_error_code = ec;
 
     if (ec) {
+        BOOST_LOG_TRIVIAL(error) << boost::format("TCPConsole: Can't connect to %1%:%2%: %3%")
+            % m_host_name
+            % m_port_name
+            % ec.message();
+
         m_io_context.stop();
     }
     else {
         m_is_connected = true;
+        BOOST_LOG_TRIVIAL(info) << boost::format("TCPConsole: connected to %1%:%2%")
+            % m_host_name
+            % m_port_name;
+
         transmit_next_command();
     }
 }
@@ -162,6 +192,11 @@ bool TCPConsole::run_queue()
     }
     catch (std::exception& e)
     {
+        BOOST_LOG_TRIVIAL(error) << boost::format("TCPConsole: Exception while talking with %1%:%2%: %3%")
+            % m_host_name
+            % m_port_name
+            % e.what();
+
         return false;
     }
 

@@ -75,7 +75,6 @@ struct TrayData
 class MaterialItem: public wxPanel
 {
 protected:
-    int m_text_pos_x =  0;
     int m_text_pos_y = -1;
     bool m_dropdown_allow_painted = true;
 
@@ -324,18 +323,25 @@ public:
     AmsHumidityLevelList(wxWindow* parent);
     ~AmsHumidityLevelList() {};
 
-public:
-    void msw_rescale();
+    ScalableBitmap background_img;
+    ScalableBitmap hum_level1_img;
+    ScalableBitmap hum_level2_img;
+    ScalableBitmap hum_level3_img;
+    ScalableBitmap hum_level4_img;
 
-private:
+    std::vector<ScalableBitmap> hum_level_img_light;
+    std::vector<ScalableBitmap> hum_level_img_dark;
+
+    wxStaticBitmap* hum_level1_bitmap;
+    wxStaticBitmap* hum_level2_bitmap;
+    wxStaticBitmap* hum_level3_bitmap;
+    wxStaticBitmap* hum_level4_bitmap;
+    wxStaticBitmap* hum_level5_bitmap;
+
+    void msw_rescale();
     void paintEvent(wxPaintEvent& evt);
     void render(wxDC& dc);
     void doRender(wxDC& dc);
-
-private:
-    ScalableBitmap background_img;
-    std::vector<ScalableBitmap> hum_level_img_light;
-    std::vector<ScalableBitmap> hum_level_img_dark;
 };
 
 class AmsHumidityTipPopup : public PopupWindow
@@ -343,31 +349,24 @@ class AmsHumidityTipPopup : public PopupWindow
 public:
     AmsHumidityTipPopup(wxWindow* parent);
     ~AmsHumidityTipPopup() {};
-
-public:
-    void set_humidity_level(int level);
-    void msw_rescale();
-
-private:
-    virtual void OnDismiss() wxOVERRIDE {};
-    virtual bool ProcessLeftDown(wxMouseEvent& event) wxOVERRIDE { return PopupWindow::ProcessLeftDown(event);  };
-
     void paintEvent(wxPaintEvent& evt);
+
+    virtual void OnDismiss() wxOVERRIDE;
+    virtual bool ProcessLeftDown(wxMouseEvent& event) wxOVERRIDE;
+
+    void set_humidity_level(int level);
     void render(wxDC& dc);
     void doRender(wxDC& dc);
 
-private:
+public:
     int current_humidity_level = 0;
 
     ScalableBitmap close_img;
-
     wxStaticBitmap* curr_humidity_img;
+    AmsHumidityLevelList* humidity_level_list{nullptr};
     wxStaticBitmap* m_img;
-
     Label* m_staticText;;
     Label* m_staticText_note;
-
-    AmsHumidityLevelList* humidity_level_list{nullptr};
 };
 
 class AmsTutorialPopup : public PopupWindow

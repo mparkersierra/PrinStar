@@ -6,7 +6,6 @@
 #include <string>
 
 #include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
 #include <libnest2d/nester.hpp>
 
 namespace libnest2d { namespace svg {

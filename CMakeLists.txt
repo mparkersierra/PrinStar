@@ -9,7 +9,7 @@ project(BambuStudio)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Link all deps statically" FORCE)
 
 # Make CMake look for .a before .dylib
-set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".dylib" ".tbd" CACHE STRING "" FORCE)
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a" ".dylib" CACHE STRING "" FORCE)
 
 # Tell CMake where Homebrew (or your deps folder) puts static libs
 list(APPEND CMAKE_PREFIX_PATH
@@ -444,14 +444,18 @@ find_package(TBB REQUIRED)
 get_target_property(_orig_tbb_loc TBB::tbb IMPORTED_LOCATION_RELEASE)
 message(STATUS "🏷  TBB::tbb originally points to: ${_orig_tbb_loc}")
 
-# Now override for Release builds
+set(_tbb_prefix "/opt/homebrew/opt/tbb/lib")  # or your BambuStudio_dep prefix
+
+# Core threading library
 set_target_properties(TBB::tbb PROPERTIES
-  IMPORTED_LOCATION_RELEASE "/opt/homebrew/opt/tbb/lib/libtbb.a"
+  IMPORTED_LOCATION_RELEASE "${_tbb_prefix}/libtbb.a"
+  IMPORTED_LOCATION_DEBUG   "${_tbb_prefix}/libtbb.a"
 )
 
-# And for Debug builds (Xcode is multi‐config)
-set_target_properties(TBB::tbb PROPERTIES
-  IMPORTED_LOCATION_DEBUG   "/opt/homebrew/opt/tbb/lib/libtbb.a"
+# Malloc-proxy library
+set_target_properties(TBB::tbbmalloc PROPERTIES
+  IMPORTED_LOCATION_RELEASE "${_tbb_prefix}/libtbbmalloc.a"
+  IMPORTED_LOCATION_DEBUG   "${_tbb_prefix}/libtbbmalloc.a"
 )
 
 message(STATUS "➡️  TBB::tbb now forced to: /opt/homebrew/opt/tbb/lib/libtbb.a")
@@ -797,6 +801,9 @@ if(Boost_FOUND AND TBB_FOUND AND ICU_FOUND)
     ICU::uc              # libicuuc
     ICU::i18n            # libicui18n
     ICU::data            # libicudata
+    TBB::tbb
+    TBB::tbbmalloc
+
   )
 endif()
 

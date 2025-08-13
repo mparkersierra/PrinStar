@@ -77,8 +77,6 @@ public:
     void set_custom_tran(const Transform3d &tran);
     BoundingBoxf3 get_bounding_box() const override;
 
-    std::string get_icon_filename(bool b_dark_mode) const override;
-
 protected:
     bool on_init() override;
     std::string on_get_name() const override { return ""; }
@@ -117,7 +115,7 @@ protected:
 public:
     //BBS: add obj manipulation logic
     //GLGizmoRotate3D(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id);
-    GLGizmoRotate3D(GLCanvas3D& parent, unsigned int sprite_id, GizmoObjectManipulation* obj_manipulation);
+    GLGizmoRotate3D(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id, GizmoObjectManipulation* obj_manipulation);
 
     Vec3d get_rotation() const { return Vec3d(m_gizmos[X].get_angle(), m_gizmos[Y].get_angle(), m_gizmos[Z].get_angle()); }
     void set_rotation(const Vec3d& rotation) { m_gizmos[X].set_angle(rotation(0)); m_gizmos[Y].set_angle(rotation(1)); m_gizmos[Z].set_angle(rotation(2)); }
@@ -140,8 +138,6 @@ public:
     }
 
     BoundingBoxf3 get_bounding_box() const override;
-
-    std::string get_icon_filename(bool b_dark_mode) const override;
 
 protected:
     bool on_init() override;

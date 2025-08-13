@@ -90,6 +90,7 @@
         "150",
         "150"
     ],
+    "wall_loops": "4",
     "compatible_printers": [
         "Bambu Lab H2D 0.4 nozzle"
     ]

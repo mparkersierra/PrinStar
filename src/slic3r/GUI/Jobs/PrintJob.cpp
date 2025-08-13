@@ -50,6 +50,7 @@ void PrintJob::prepare()
     if (&job_data) {
         std::string temp_file = Slic3r::resources_dir() + "/check_access_code.txt";
         auto check_access_code_path = temp_file.c_str();
+        BOOST_LOG_TRIVIAL(trace) << "sned_job: check_access_code_path = " << check_access_code_path;
         job_data._temp_path = fs::path(check_access_code_path);
     }
 
@@ -255,7 +256,6 @@ void PrintJob::process()
     params.auto_bed_leveling    = this->auto_bed_leveling;
     params.auto_flow_cali       = this->auto_flow_cali;
     params.auto_offset_cali     = this->auto_offset_cali;
-    params.task_ext_change_assist = this->task_ext_change_assist;
 
     if (m_print_type == "from_sdcard_view") {
         params.dst_file = m_dst_path;
@@ -299,7 +299,6 @@ void PrintJob::process()
 
                 std::regex pattern("_+");
                 params.project_name = std::regex_replace(mall_model_name, pattern, "_");
-                params.project_name = truncate_string(params.project_name, 100);
             }
             catch (...) {}
         }

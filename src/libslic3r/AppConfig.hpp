@@ -253,7 +253,6 @@ public:
 
 	static const std::string SECTION_FILAMENTS;
     static const std::string SECTION_MATERIALS;
-    static const std::string SECTION_EMBOSS_STYLE;
 
 private:
 	template<typename T>
@@ -288,8 +287,6 @@ private:
 
 	std::vector<std::string>									m_filament_presets;
     std::vector<std::string>									m_filament_colors;
-	std::vector<std::string>									m_filament_multi_colors;
-	std::vector<std::string>									m_filament_color_types;
 
 	std::vector<PrinterCaliInfo>								m_printer_cali_infos;
 };

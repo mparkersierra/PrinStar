@@ -68,7 +68,6 @@
 #include "MainFrame.hpp"
 #include "Plater.hpp"
 #include "GLCanvas3D.hpp"
-#include "EncodedFilament.hpp"
 
 #include "../Utils/PresetUpdater.hpp"
 #include "../Utils/PrintHost.hpp"
@@ -76,7 +75,6 @@
 #include "../Utils/MacDarkMode.hpp"
 #include "../Utils/Http.hpp"
 #include "../Utils/UndoRedo.hpp"
-#include "../Utils/HelioDragon.hpp"
 #include "slic3r/Config/Snapshot.hpp"
 #include "Preferences.hpp"
 #include "Tab.hpp"
@@ -107,7 +105,6 @@
 #include "PrivacyUpdateDialog.hpp"
 #include "ModelMall.hpp"
 #include "HintNotification.hpp"
-#include "BBLUtil.hpp"
 
 //#ifdef WIN32
 //#include "BaseException.h"
@@ -1087,29 +1084,6 @@ void GUI_App::post_init()
         BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << " sync_user_preset: false";
     }
 
-    /*request helio config*/
-    if (app_config->get("helio_enable") == "true") {
-        // BBS loading user preset
-        // Always async, not such startup step
-        // BOOST_LOG_TRIVIAL(info) << "Loading user presets...";
-        // scrn->SetText(_L("Loading user presets..."));
-        //if (m_agent) { request_helio_supported_data(); }
-
-        std::string helio_api_key = Slic3r::HelioQuery::get_helio_pat();
-        if (helio_api_key.empty()) {
-            wxGetApp().request_helio_pat([](std::string pat) {
-                Slic3r::HelioQuery::set_helio_pat(pat);
-                wxGetApp().request_helio_supported_data();
-            });
-        } else {
-            wxGetApp().request_helio_supported_data();
-        }
-
-        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << " sync helio config: true";
-    } else {
-        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << " sync helio config: false";
-    }
-
     m_open_method = "double_click";
     bool switch_to_3d = false;
     if (!this->init_params->input_files.empty()) {
@@ -1162,7 +1136,7 @@ void GUI_App::post_init()
             }
             catch (...){}
 
-            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(", download_url %1%") % PathSanitizer::sanitize(download_url);
+            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(", download_url %1%") % download_url;
 
             if (!download_url.empty()) {
                 m_download_file_url = from_u8(download_url);
@@ -1290,7 +1264,7 @@ void GUI_App::post_init()
     }*/
 
     //BBS: check crash log
-    /*auto log_dir_path = boost::filesystem::path(data_dir()) / "log";
+    auto log_dir_path = boost::filesystem::path(data_dir()) / "log";
     if (boost::filesystem::exists(log_dir_path))
     {
         boost::filesystem::directory_iterator end_iter;
@@ -1320,7 +1294,7 @@ void GUI_App::post_init()
                 }
             }
         }
-    }*/
+    }
 
     if (m_networking_need_update) {
         //updating networking
@@ -1367,7 +1341,7 @@ void GUI_App::post_init()
     if(!m_networking_need_update && m_agent) {
         m_agent->set_on_ssdp_msg_fn(
             [this](std::string json_str) {
-                if (is_closing()) {
+                if (m_is_closing) {
                     return;
                 }
                 GUI::wxGetApp().CallAfter([this, json_str] {
@@ -1475,7 +1449,7 @@ void GUI_App::shutdown()
     }
 
     if (m_is_recreating_gui) return;
-    set_closing(true);
+    m_is_closing = true;
     BOOST_LOG_TRIVIAL(info) << "GUI_App::shutdown exit";
 }
 
@@ -1787,11 +1761,11 @@ int GUI_App::install_plugin(std::string name, std::string package_name, InstallP
     //auto plugin_folder = boost::filesystem::path(wxStandardPaths::Get().GetUserDataDir().ToUTF8().data()) / "plugins";
     auto backup_folder = plugin_folder/"backup";
     if (!boost::filesystem::exists(plugin_folder)) {
-        BOOST_LOG_TRIVIAL(info) << "[install_plugin] will create directory plugin under data dir";
+        BOOST_LOG_TRIVIAL(info) << "[install_plugin] will create directory "<<plugin_folder.string();
         boost::filesystem::create_directory(plugin_folder);
     }
     if (!boost::filesystem::exists(backup_folder)) {
-        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(", will create directory backup under plugin dir");
+        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(", will create directory %1%")%backup_folder.string();
         boost::filesystem::create_directory(backup_folder);
     }
 
@@ -1893,13 +1867,13 @@ int GUI_App::install_plugin(std::string name, std::string package_name, InstallP
                 if (fs::is_regular_file(it->status())) { ++file_count; }
             }
             for (fs::directory_iterator it(dir_path); it != fs::directory_iterator(); ++it) {
-                BOOST_LOG_TRIVIAL(trace) << " current path:" << PathSanitizer::sanitize(it->path().string());
+                BOOST_LOG_TRIVIAL(info) << " current path:" << it->path().string();
                 if (it->path().string() == backup_folder) {
                     continue;
                 }
                 auto dest_path = backup_folder.string() + "/" + it->path().filename().string();
                 if (fs::is_regular_file(it->status())) {
-                    BOOST_LOG_TRIVIAL(trace) << " copy file:" << PathSanitizer::sanitize(it->path().string()) << "," << it->path().filename();
+                    BOOST_LOG_TRIVIAL(info) << " copy file:" << it->path().string() << "," << it->path().filename();
                     try {
                         if (pro_fn) { pro_fn(InstallStatusNormal, 50 + file_index / file_count, cancel); }
                         file_index++;
@@ -1911,7 +1885,7 @@ int GUI_App::install_plugin(std::string name, std::string package_name, InstallP
                         BOOST_LOG_TRIVIAL(error) << "Copying to backup failed: " << e.what();
                     }
                 } else {
-                    BOOST_LOG_TRIVIAL(trace) << " copy framework:" << it->path().string() << "," << it->path().filename();
+                    BOOST_LOG_TRIVIAL(info) << " copy framework:" << it->path().string() << "," << it->path().filename();
                     copy_framework(it->path().string(), dest_path);
                 }
             }
@@ -1934,7 +1908,7 @@ void GUI_App::restart_networking()
         init_networking_callbacks();
         m_agent->set_on_ssdp_msg_fn(
             [this](std::string json_str) {
-                if (is_closing()) {
+                if (m_is_closing) {
                     return;
                 }
                 GUI::wxGetApp().CallAfter([this, json_str] {
@@ -1977,11 +1951,11 @@ void GUI_App::remove_old_networking_plugins()
     auto plugin_folder = data_dir_path / "plugins";
     //auto plugin_folder = boost::filesystem::path(wxStandardPaths::Get().GetUserDataDir().ToUTF8().data()) / "plugins";
     if (boost::filesystem::exists(plugin_folder)) {
-        BOOST_LOG_TRIVIAL(info) << "[remove_old_networking_plugins] remove the directory " << PathSanitizer::sanitize(plugin_folder);
+        BOOST_LOG_TRIVIAL(info) << "[remove_old_networking_plugins] remove the directory "<<plugin_folder.string();
         try {
             fs::remove_all(plugin_folder);
         } catch (...) {
-            BOOST_LOG_TRIVIAL(error) << "Failed  removing the plugins directory " << PathSanitizer::sanitize(plugin_folder);
+            BOOST_LOG_TRIVIAL(error) << "Failed  removing the plugins directory " << plugin_folder.string();
         }
     }
 }
@@ -2060,7 +2034,7 @@ void GUI_App::init_networking_callbacks()
 
 
         m_agent->set_on_server_connected_fn([this](int return_code, int reason_code) {
-            if (is_closing()) {
+            if (m_is_closing) {
             return;
             }
             if (return_code == 5) {
@@ -2074,7 +2048,7 @@ void GUI_App::init_networking_callbacks()
                 return;
             }
             GUI::wxGetApp().CallAfter([this] {
-                if (is_closing())
+                if (m_is_closing)
                     return;
                 BOOST_LOG_TRIVIAL(trace) << "static: server connected";
                 m_agent->set_user_selected_machine(m_agent->get_user_selected_machine());
@@ -2085,6 +2059,7 @@ void GUI_App::init_networking_callbacks()
                     m_agent->set_user_selected_machine(m_agent->get_user_selected_machine());
                     //subscribe device
                     if (m_agent->is_user_login()) {
+                        m_agent->start_device_subscribe();
 
                         /*disconnect lan*/
                         DeviceManager* dev = this->getDeviceManager();
@@ -2112,11 +2087,11 @@ void GUI_App::init_networking_callbacks()
             });
 
         m_agent->set_on_printer_connected_fn([this](std::string dev_id) {
-            if (is_closing()) {
+            if (m_is_closing) {
                 return;
             }
             GUI::wxGetApp().CallAfter([this, dev_id] {
-                if (is_closing())
+                if (m_is_closing)
                     return;
                 bool tunnel = boost::algorithm::starts_with(dev_id, "tunnel/");
                 /* request_pushing */
@@ -2155,11 +2130,11 @@ void GUI_App::init_networking_callbacks()
 
         m_agent->set_on_local_connect_fn(
             [this](int state, std::string dev_id, std::string msg) {
-                if (is_closing()) {
+                if (m_is_closing) {
                     return;
                 }
                 CallAfter([this, state, dev_id, msg] {
-                    if (is_closing()) {
+                    if (m_is_closing) {
                         return;
                     }
                     /* request_pushing */
@@ -2226,11 +2201,11 @@ void GUI_App::init_networking_callbacks()
         );
 
         auto message_arrive_fn = [this](std::string dev_id, std::string msg) {
-            if (is_closing()) {
+            if (m_is_closing) {
                 return;
             }
             CallAfter([this, dev_id, msg] {
-                if (is_closing())
+                if (m_is_closing)
                     return;
                 this->process_network_msg(dev_id, msg);
 
@@ -2260,11 +2235,11 @@ void GUI_App::init_networking_callbacks()
         m_agent->set_on_message_fn(message_arrive_fn);
 
         auto user_message_arrive_fn = [this](std::string user_id, std::string msg) {
-            if (is_closing()) {
+            if (m_is_closing) {
                 return;
             }
             CallAfter([this, user_id, msg] {
-                if (is_closing())
+                if (m_is_closing)
                     return;
 
                 //check user
@@ -2279,11 +2254,11 @@ void GUI_App::init_networking_callbacks()
 
 
         auto lan_message_arrive_fn = [this](std::string dev_id, std::string msg) {
-            if (is_closing()) {
+            if (m_is_closing) {
                 return;
             }
             CallAfter([this, dev_id, msg] {
-                if (is_closing())
+                if (m_is_closing)
                     return;
 
                 this->process_network_msg(dev_id, msg);
@@ -2584,7 +2559,7 @@ void GUI_App::on_start_subscribe_again(std::string dev_id)
         if ( (dev_id == obj->dev_id) && obj->is_connecting() && obj->subscribe_counter > 0) {
             obj->subscribe_counter--;
             if(wxGetApp().getAgent()) wxGetApp().getAgent()->set_user_selected_machine(dev_id);
-            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": dev_id=" << BBLCrossTalk::Crosstalk_DevId(obj->dev_id);
+            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": dev_id=" << obj->dev_id;
         }
     });
     start_subscribe_timer->Start(5000, wxTIMER_ONE_SHOT);
@@ -2611,7 +2586,7 @@ std::string GUI_App::get_local_models_path()
 
 void GUI_App::init_single_instance_checker(const std::string &name, const std::string &path)
 {
-    BOOST_LOG_TRIVIAL(debug) << "init wx instance checker " << name << " " << PathSanitizer::sanitize(path);
+    BOOST_LOG_TRIVIAL(debug) << "init wx instance checker " << name << " "<< path;
     m_single_instance_checker = std::make_unique<wxSingleInstanceChecker>(boost::nowide::widen(name), boost::nowide::widen(path));
 }
 
@@ -2789,7 +2764,7 @@ bool GUI_App::on_init_inner()
 
 #ifdef WIN32
     //BBS set crash log folder
-    //CBaseException::set_log_folder(data_dir());
+    CBaseException::set_log_folder(data_dir());
 #endif
 
     wxGetApp().Bind(wxEVT_QUERY_END_SESSION, [this](auto & e) {
@@ -2819,19 +2794,9 @@ bool GUI_App::on_init_inner()
     }
 #endif
 
-    BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, Current BambuStudio Version %1%")%SLIC3R_VERSION << ", BuildTime " << SLIC3R_BUILD_TIME;
-
-#if !BBL_RELEASE_TO_PUBLIC
-    BOOST_LOG_TRIVIAL(info) << boost::format("Build Version %1%")%SLIC3R_COMPILE_VERSION;
-#endif
-
+    BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, Current BambuStudio Version %1%")%SLIC3R_VERSION;
     BOOST_LOG_TRIVIAL(info) << get_system_info();
 
-// initialize label colors and fonts
-    init_label_colours();
-    init_fonts();
-    wxGetApp().Update_dark_mode_flag();
-    
 #if defined(__WINDOWS__)
     HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
     m_is_arm64 = false;
@@ -2906,6 +2871,10 @@ bool GUI_App::on_init_inner()
 #endif // __WINDOWS__
 
 #endif
+    // initialize label colors and fonts
+    init_label_colours();
+    init_fonts();
+    wxGetApp().Update_dark_mode_flag();
 
 
 #ifdef _MSW_DARK_MODE
@@ -3315,12 +3284,12 @@ void GUI_App::copy_network_if_available()
 
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": checking network_library from ota directory";
     if (!boost::filesystem::exists(plugin_folder)) {
-        //BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": create directory " << plugin_folder.string();
+        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": create directory " << plugin_folder.string();
         boost::filesystem::create_directory(plugin_folder);
     }
 
     if (!boost::filesystem::exists(cache_folder)) {
-        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": can not found ota plugins directory ";
+        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": can not found ota plugins directory " << cache_folder.string();
         app_config->set("update_network_plugin", "false");
         return;
     }
@@ -3343,7 +3312,7 @@ void GUI_App::copy_network_if_available()
 
                 static constexpr const auto perms = fs::owner_read | fs::owner_write | fs::group_read | fs::others_read;
                 fs::permissions(dest_path, perms);
-                BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": Copying network library successfully.";
+                BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": Copying network library from" << file_path << " to " << dest_path << " successfully.";
             }
         }
         if (boost::filesystem::exists(cache_folder))
@@ -3861,7 +3830,7 @@ wxSize GUI_App::get_min_size() const
     return wxSize(std::max(1000, 76*m_em_unit), std::max(600, 49 * m_em_unit));
 }
 
-float GUI_App::toolbar_icon_scale(bool auto_scale, const bool is_limited/* = false*/) const
+float GUI_App::toolbar_icon_scale(const bool is_limited/* = false*/) const
 {
 #ifdef __APPLE__
     const float icon_sc = 1.0f; // for Retina display will be used its own scale
@@ -3869,9 +3838,7 @@ float GUI_App::toolbar_icon_scale(bool auto_scale, const bool is_limited/* = fal
     const float icon_sc = m_em_unit * 0.1f;
 #endif // __APPLE__
 
-    if (!auto_scale) {
-        return icon_sc;
-    }
+    //return icon_sc;
 
     const std::string& auto_val = app_config->get("toolkit_size");
 
@@ -4088,22 +4055,6 @@ bool GUI_App::catch_error(std::function<void()> cb,
     return false;
 }
 
-void GUI_App::request_helio_pat(std::function<void(std::string)> func)
-{
-    Slic3r::HelioQuery::request_pat_token(func);
-}
-
-void GUI_App::request_helio_supported_data()
-{
-    std:;string helio_api_url = Slic3r::HelioQuery::get_helio_api_url();
-    std::string helio_api_key = Slic3r::HelioQuery::get_helio_pat();
-
-    if (HelioQuery::global_supported_printers.size() <= 0 || HelioQuery::global_supported_materials.size() <= 0) {
-        Slic3r::HelioQuery::request_all_support_machine(helio_api_url, helio_api_key);
-        Slic3r::HelioQuery::request_all_support_materials(helio_api_url, helio_api_key);
-    }
-}
-
 // static method accepting a wxWindow object as first parameter
 void fatal_error(wxWindow* parent)
 {
@@ -4258,17 +4209,24 @@ wxString GUI_App::transition_tridid(int trid_id) const
         int id_index = trid_id / 4;
         return wxString::Format("%s", maping_dict[id_index]);
     }
-    else if (trid_id >= 0x80 && trid_id <= 0x87) { // n3s
+    else {
+        int id_index = ceil(trid_id / 4);
+        int id_suffix = trid_id % 4 + 1;
+        return wxString::Format("%s%d", maping_dict[id_index], id_suffix);
+    }
+}
+
+wxString GUI_App::transition_tridid(int trid_id, bool is_n3s) const
+{
+    if (is_n3s)
+    {
         const char base = 'A' + (trid_id - 128);
         wxString prefix("HT-");
         prefix.append(base);
         return prefix;
     }
-    else {
-        int id_index = std::clamp((int)ceil(trid_id / 4), 0, 25);
-        int id_suffix = trid_id % 4 + 1;
-        return wxString::Format("%s%d", maping_dict[id_index], id_suffix);
-    }
+
+    return transition_tridid(trid_id);
 }
 
 //BBS
@@ -4363,7 +4321,7 @@ int GUI_App::request_user_unbind(std::string dev_id)
     int result = -1;
     if (m_agent) {
         result = m_agent->unbind(dev_id);
-        BOOST_LOG_TRIVIAL(info) << "request_user_unbind, dev_id = " << BBLCrossTalk::Crosstalk_DevId(dev_id) << ", result = " << result;
+        BOOST_LOG_TRIVIAL(info) << "request_user_unbind, dev_id = " << dev_id << ", result = " << result;
         return result;
     }
     return result;
@@ -4596,28 +4554,9 @@ std::string GUI_App::handle_web_request(std::string cmd)
             }
             else if (command_str.compare("homepage_makerlab_open") == 0) {
                 if (root.get_child_optional("url") != boost::none) {
-                    if(wxGetApp().is_user_login()) {
-                        std::string strUrl = root.get_optional<std::string>("url").value();
+                    std::string strUrl = root.get_optional<std::string>("url").value();
 
-                        if (mainframe && mainframe->m_webview) { mainframe->m_webview->OpenOneMakerlab(strUrl); }
-                    }else {
-                        //Check Plugin
-                        bool bValid = is_compatibility_version();
-                        if (!bValid) {
-                            CallAfter([this] { handle_web_request("{\"sequence_id\":1,\"command\":\"homepage_need_networkplugin\"}");
-                                });
-                            return "";
-                        }
-                        CallAfter([this] {
-                            this->request_login(true);
-                        });
-                    }
-
-                }
-            }
-            else if (command_str.compare("update_plugin_installtip") == 0) {
-                if (mainframe) {
-                    mainframe->refresh_plugin_tips();
+                    if (mainframe && mainframe->m_webview) { mainframe->m_webview->OpenOneMakerlab(strUrl); }
                 }
             }
             else if (command_str.compare("homepage_need_networkplugin") == 0) {
@@ -4958,6 +4897,7 @@ void GUI_App::on_user_login_handle(wxCommandEvent &evt)
 
     int online_login = evt.GetInt();
     m_agent->connect_server();
+
     // get machine list
     DeviceManager* dev = Slic3r::GUI::wxGetApp().getDeviceManager();
     if (!dev) return;
@@ -5705,7 +5645,7 @@ void GUI_App::start_sync_user_preset(bool with_progress_dlg)
             });
         };
         cancelFn = [this, dlg]() {
-            return is_closing() || dlg->WasCanceled();
+            return m_is_closing || dlg->WasCanceled();
         };
         finishFn = [this, userid = m_agent->get_user_id(), dlg, t = std::weak_ptr(m_user_sync_token)](bool ok) {
             CallAfter([=]{
@@ -5720,16 +5660,12 @@ void GUI_App::start_sync_user_preset(bool with_progress_dlg)
                 if (ok && m_agent && t.lock() == m_user_sync_token && userid == m_agent->get_user_id()) reload_settings();
             });
         };
-        cancelFn = [this]() {
-            return is_closing();
-        };
     }
 
     m_sync_update_thread = Slic3r::create_thread(
         [this, progressFn, cancelFn, finishFn, t = std::weak_ptr(m_user_sync_token)] {
             // get setting list, update setting list
             std::string version = preset_bundle->get_vendor_profile_version(PresetBundle::BBL_BUNDLE).to_string();
-            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << __LINE__ << " start sync user preset, m_is_closing = " << m_is_closing;
             int ret = m_agent->get_setting_list2(version, [this](auto info) {
                 auto type = info[BBL_JSON_KEY_TYPE];
                 auto name = info[BBL_JSON_KEY_NAME];
@@ -5748,7 +5684,6 @@ void GUI_App::start_sync_user_preset(bool with_progress_dlg)
                     return true;
                 }
             }, progressFn, cancelFn);
-            BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << __LINE__ << " get_setting_list2 ret = " << ret << " m_is_closing = " << m_is_closing;
             finishFn(ret == 0);
 
             int count = 0, sync_count = 0;
@@ -5793,7 +5728,7 @@ void GUI_App::start_sync_user_preset(bool with_progress_dlg)
 
                         if (total_count == 0) {
                             CallAfter([this] {
-                                if (!is_closing())
+                                if (!m_is_closing)
                                     plater()->get_notification_manager()->close_notification_of_type(NotificationType::BBLUserPresetExceedLimit);
                             });
                         }
@@ -5832,7 +5767,7 @@ void GUI_App::stop_sync_user_preset()
 
     m_user_sync_token.reset();
     if (m_sync_update_thread.joinable()) {
-        if (is_closing())
+        if (m_is_closing)
             m_sync_update_thread.join();
         else
             m_sync_update_thread.detach();
@@ -6060,27 +5995,13 @@ bool GUI_App::load_language(wxString language, bool initial)
     	// There is a static list of lookup path prefixes in wxWidgets. Add ours.
 	    wxFileTranslationsLoader::AddCatalogLookupPathPrefix(from_u8(localization_dir()));
     	// Get the active language from PrusaSlicer.ini, or empty string if the key does not exist.
-
         language = app_config->get("language");
-
-        /* erase the unsupported language in config files*/
-        {
-            wxLanguage cur_lang = wxLANGUAGE_UNKNOWN;
-            auto cur_lang_info = wxLocale::FindLanguageInfo(language);
-            if (cur_lang_info) { cur_lang = static_cast<wxLanguage> (cur_lang_info->Language);}
-            if (std::find(s_supported_languages.begin(), s_supported_languages.end(), cur_lang) == s_supported_languages.end())
-            {
-                app_config->set("language", "");
-                language = app_config->get("language");
-            }
-        }
-
         if (! language.empty())
         	BOOST_LOG_TRIVIAL(info) << boost::format("language provided by BambuStudio.conf: %1%") % language;
         else {
             // Get the system language.
             const wxLanguage lang_system = wxLanguage(wxLocale::GetSystemLanguage());
-            if (std::find(s_supported_languages.begin(), s_supported_languages.end(), lang_system) != s_supported_languages.end()) {
+            if (lang_system != wxLANGUAGE_UNKNOWN) {
                 m_language_info_system = wxLocale::GetLanguageInfo(lang_system);
 #ifdef __WXMSW__
                 WCHAR wszLanguagesBuffer[LOCALE_NAME_MAX_LENGTH];
@@ -6308,7 +6229,6 @@ void GUI_App::update_mode()
     sidebar().update_mode();
 
     //BBS: GUI refactor
-    mainframe->update_calibration_button_status();
     if (mainframe->m_param_panel)
         mainframe->m_param_panel->update_mode();
     if (mainframe->m_param_dialog)
@@ -6942,9 +6862,7 @@ void GUI_App::OSXStoreOpenFiles(const wxArrayString &fileNames)
 
 void GUI_App::MacOpenURL(const wxString& url)
 {
-#if !BBL_RELEASE_TO_PUBLIC
     BOOST_LOG_TRIVIAL(trace) << __FUNCTION__ << "get mac url " << url;
-#endif
 
     if (!url.empty() && boost::starts_with(url, "bambustudioopen://")) {
         auto input_str_arr = split_str(url.ToStdString(), "bambustudioopen://");
@@ -6956,11 +6874,7 @@ void GUI_App::MacOpenURL(const wxString& url)
         }
 
         std::string download_file_url = url_decode(download_origin_url);
-
-#if !BBL_RELEASE_TO_PUBLIC
         BOOST_LOG_TRIVIAL(trace) << __FUNCTION__ << download_file_url;
-#endif
-
         if (!download_file_url.empty() && (boost::starts_with(download_file_url, "http://") || boost::starts_with(download_file_url, "https://"))) {
 
             if (m_post_initialized) {
@@ -7634,17 +7548,6 @@ const ColorRGB& GUI_App::get_picking_color() const
     return m_picking_color;
 }
 
-
-FilamentColorCodeQuery* GUI_App::get_filament_color_code_query()
-{
-    if (!m_filament_color_code_query)
-    {
-        m_filament_color_code_query = new FilamentColorCodeQuery();
-    }
-
-    return m_filament_color_code_query;
-}
-
 bool GUI_App::open_browser_with_warning_dialog(const wxString& url, int flags/* = 0*/)
 {
     return wxLaunchDefaultBrowser(url, flags);
@@ -7793,6 +7696,7 @@ void GUI_App::disassociate_files(std::wstring extend)
        ::SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
 }
 
+
 #endif // __WXMSW__
 
 bool is_soluble_filament(int extruder_id)
@@ -7830,7 +7734,7 @@ bool has_filaments(const std::vector<string>& model_filaments) {
     return false;
 }
 
-bool is_support_filament(int extruder_id, bool strict_check)
+bool is_support_filament(int extruder_id)
 {
     auto &filament_presets = Slic3r::GUI::wxGetApp().preset_bundle->filament_presets;
     auto &filaments        = Slic3r::GUI::wxGetApp().preset_bundle->filaments;
@@ -7844,7 +7748,7 @@ bool is_support_filament(int extruder_id, bool strict_check)
 
     Slic3r::ConfigOptionBools *support_option = dynamic_cast<Slic3r::ConfigOptionBools *>(filament->config.option("filament_is_support"));
 
-    if(!strict_check &&(filament_type == "PETG" || filament_type == "PLA")) {
+    if (filament_type == "PETG" || filament_type == "PLA") {
         std::vector<string> model_filaments;
         if (filament_type == "PETG")
             model_filaments.emplace_back("PLA");

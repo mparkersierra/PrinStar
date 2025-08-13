@@ -2,7 +2,6 @@
 #include "MainFrame.hpp"
 #include "I18N.hpp"
 #include "Widgets/Label.hpp"
-#include "BBLUtil.hpp"
 
 namespace Slic3r { namespace GUI {
 
@@ -102,10 +101,7 @@ void CalibrationCaliPage::set_cali_img()
 {
     if (m_cali_mode == CalibMode::Calib_PA_Line) {
         if (m_cali_method == CalibrationMethod::CALI_METHOD_MANUAL) {
-            CalibrationMethod method;
-            int               cali_stage    = 0;
-            CalibMode         obj_cali_mode = get_obj_calibration_mode(curr_obj, method, cali_stage);
-            set_pa_cali_image(cali_stage);
+            m_picture_panel->set_bmp(ScalableBitmap(this, "fd_calibration_manual", 400));
         }
         else if (m_cali_method == CalibrationMethod::CALI_METHOD_AUTO) {
             if (curr_obj) {
@@ -170,7 +166,7 @@ void CalibrationCaliPage::update(MachineObject* obj)
         if (obj) {
             if (obj->print_status != "RUNNING") {
                 BOOST_LOG_TRIVIAL(info) << "on_show_cali_page - machine object status:"
-                                        << " dev_id = " << BBLCrossTalk::Crosstalk_DevId(obj->dev_id)
+                                        << " dev_id = " << obj->dev_id
                                         << ", print_type = " << obj->printer_type
                                         << ", printer_status = " << obj->print_status
                                         << ", is_connected = " << obj->is_connected()

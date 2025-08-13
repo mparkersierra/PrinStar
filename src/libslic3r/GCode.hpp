@@ -73,8 +73,7 @@ public:
         const Vec3d                                                  plate_origin,
         const std::vector<WipeTower::ToolChangeResult>              &priming,
         const std::vector<std::vector<WipeTower::ToolChangeResult>> &tool_changes,
-        const WipeTower::ToolChangeResult                           &final_purge,
-        const std::vector<unsigned int>                             &slice_used_filaments) :
+        const WipeTower::ToolChangeResult                           &final_purge) :
         m_left(/*float(print_config.wipe_tower_x.value)*/ 0.f),
         m_right(float(/*print_config.wipe_tower_x.value +*/ print_config.prime_tower_width.value)),
         m_wipe_tower_pos(float(print_config.wipe_tower_x.get_at(plate_idx)), float(print_config.wipe_tower_y.get_at(plate_idx))),
@@ -87,7 +86,6 @@ public:
         m_plate_origin(plate_origin),
         m_single_extruder_multi_material(print_config.single_extruder_multi_material),
         m_enable_timelapse_print(print_config.timelapse_type.value == TimelapseType::tlSmooth),
-        m_enable_wrapping_detection(print_config.enable_wrapping_detection && (slice_used_filaments.size() <= 1)),
         m_is_first_print(true),
         m_print_config(&print_config)
     {
@@ -141,7 +139,6 @@ private:
     Vec3d                                                        m_plate_origin;
     bool                                                         m_single_extruder_multi_material;
     bool                                                         m_enable_timelapse_print;
-    bool                                                         m_enable_wrapping_detection;
     bool                                                         m_is_first_print;
     const PrintConfig *                                          m_print_config;
     float                                                        m_wipe_tower_depth;
@@ -221,7 +218,7 @@ public:
     std::string set_object_info(Print* print);
 
     // append full config to the given string
-    static void append_full_config(const DynamicPrintConfig &cfg, std::string &str);
+    static void append_full_config(const Print& print, std::string& str);
 
     // BBS: detect lift type in needs_retraction
     bool        needs_retraction(const Polyline &travel, ExtrusionRole role, LiftType &lift_type);
@@ -383,7 +380,6 @@ private:
     void check_placeholder_parser_failed();
     size_t cur_extruder_index() const;
     size_t get_extruder_id(unsigned int filament_id) const;
-    void set_extrude_acceleration(bool is_first_layer);
 
     void            set_last_pos(const Point &pos) { m_last_pos = pos; m_last_pos_defined = true; }
     void            set_last_scarf_seam_flag(bool flag) { m_last_scarf_seam_flag = flag; }
@@ -399,11 +395,7 @@ private:
 
     //smooth speed function
     void            smooth_speed_discontinuity_area(ExtrusionPaths &paths);
-    std::vector<ExtrusionPaths>  merge_same_speed_paths(const ExtrusionPaths &paths);
-
-    // slow down by height
-    bool slowDownByHeight(double& maxSpeed, double& maxAcc, const ExtrusionPath& path);
-
+    ExtrusionPaths  merge_same_speed_paths(const ExtrusionPaths &paths);
     // Extruding multiple objects with soluble / non-soluble / combined supports
     // on a multi-material printer, trying to minimize tool switches.
     // Following structures sort extrusions by the extruder ID, by an order of objects and object islands.
@@ -473,8 +465,6 @@ private:
     std::string     extrude_support(const ExtrusionEntityCollection &support_fills);
 
     std::string travel_to(const Point &point, ExtrusionRole role, std::string comment, double z = DBL_MAX);
-
-    void reset_last_acceleration();
     // BBS
     LiftType to_lift_type(ZHopType z_hop_types);
 
@@ -587,8 +577,8 @@ private:
     int get_highest_bed_temperature(const bool is_first_layer,const Print &print) const;
 
     std::string _extrude(const ExtrusionPath &path, std::string description = "", double speed = -1, bool set_holes_and_compensation_speed = false, bool is_first_slope = false);
-    ExtrusionPaths set_speed_transition(std::vector<ExtrusionPaths> &paths);
-    void split_and_mapping_speed(double other_path_v, double final_v, ExtrusionPaths &this_path, double max_smooth_length, ExtrusionPaths &interpolated_paths, bool split_from_left = true);
+    ExtrusionPaths set_speed_transition(ExtrusionPaths &paths);
+    ExtrusionPaths split_and_mapping_speed(double &other_path_v, double &final_v, ExtrusionPath &this_path, double max_smooth_length, bool split_from_left = true);
     double get_path_speed(const ExtrusionPath &path);
     double get_overhang_degree_corr_speed(float speed, double path_degree);
     double mapping_speed(double dist);

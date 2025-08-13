@@ -44,7 +44,6 @@ enum ColumnNumber
     colFilament        ,    // extruder selection
     // BBS
     colSupportPaint    ,
-    colFuzzySkin       ,
     colColorPaint      ,
     colSinking         ,
     colEditing         ,    // item editing
@@ -69,7 +68,6 @@ enum class InfoItemType
     Undef,
     CustomSupports,
     //CustomSeam,
-    FuzzySkin,
     MmuSegmentation,
     //Sinking
     CutConnectors,
@@ -99,7 +97,6 @@ class ObjectDataViewModelNode
     wxBitmap				        m_action_icon;
     // BBS
     wxBitmap                        m_support_icon;
-    wxBitmap                        m_fuzzyskin_icon;
     wxBitmap                        m_color_icon;
     wxBitmap                        m_sinking_icon;
     PrintIndicator                  m_printable {piUndef};
@@ -118,7 +115,6 @@ class ObjectDataViewModelNode
     bool                            m_action_enable = false; // can undo all settings
     // BBS
     bool                            m_support_enable = false;
-    bool                            m_fuzzyskin_enable = false;
     bool                            m_color_enable = false;
     bool                            m_sink_enable = false;
 
@@ -264,7 +260,6 @@ public:
     // BBS
     bool            HasColorPainting() const        { return m_color_enable; }
     bool            HasSupportPainting() const { return m_support_enable; }
-    bool            HasFuzzySkinPainting() const { return m_fuzzyskin_enable; }
     bool            HasSinking() const { return m_sink_enable; }
     bool            IsActionEnabled() const         { return m_action_enable; }
     void            UpdateExtruderAndColorIcon(wxString extruder = "");
@@ -308,7 +303,6 @@ public:
     // BBS
     void        set_color_icon(bool enable, bool force = false);
     void        set_support_icon(bool enable,bool force = false);
-    void        set_fuzzyskin_icon(bool enable, bool force = false);
     void        set_sinking_icon(bool enable, bool force = false);
 
     // Set warning icon for node
@@ -514,11 +508,9 @@ public:
     // BBS
     bool    IsColorPainted(wxDataViewItem& item) const;
     bool    IsSupportPainted(wxDataViewItem &item) const;
-    bool    IsFuzzySkinPainted(wxDataViewItem &item) const;
     bool    IsSinked(wxDataViewItem &item) const;
     void    SetColorPaintState(const bool painted, wxDataViewItem obj_item,bool force = false);
     void    SetSupportPaintState(const bool painted, wxDataViewItem obj_item,bool force = false);
-    void    SetFuzzySkinPaintState(const bool painted, wxDataViewItem obj_item, bool force = false);
     void    SetSinkState(const bool painted, wxDataViewItem obj_item,bool force = false);
 
     void    SetAssociatedControl(wxDataViewCtrl* ctrl) { m_ctrl = ctrl; }

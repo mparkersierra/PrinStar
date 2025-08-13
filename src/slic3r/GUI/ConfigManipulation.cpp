@@ -140,36 +140,7 @@ void ConfigManipulation::check_filament_max_volumetric_speed(DynamicPrintConfig 
     }
 
 }
-void ConfigManipulation::check_filament_scarf_setting(DynamicPrintConfig *config)
-{
-    bool post_warning = false;
-    float layer_height = wxGetApp().preset_bundle->prints.get_selected_preset().config.opt_float("layer_height");
-    DynamicPrintConfig new_conf = *config;
-    //std::vector<FloatOrPercent> new_data = config->option<ConfigOptionFloatsOrPercents>("filament_scarf_height")->values;
-    for (size_t i = 0; i < config->option<ConfigOptionFloatsOrPercents>("filament_scarf_height")->size(); i++) {
-        double value = config->option<ConfigOptionFloatsOrPercents>("filament_scarf_height")->values[i].get_abs_value(1);
-        bool   reset = false;
-        if (config->option<ConfigOptionFloatsOrPercents>("filament_scarf_height")->values[i].percent) {
-            if (value >= 1)
-                reset = true;
-        } else if (value > layer_height)
-            reset = true;
-        if (reset) {
-            post_warning = true;
-            new_conf.option<ConfigOptionFloatsOrPercents>("filament_scarf_height")->values[i] =
-                wxGetApp().preset_bundle->filaments.get_selected_preset().config.option<ConfigOptionFloatsOrPercents>("filament_scarf_height")->values[i];
-        }
 
-    }
-    if (post_warning) {
-        const wxString msg_text = _(L("Should not large than 100%.\nReset to defualt"));
-        MessageDialog  dialog(nullptr, msg_text, "", wxICON_WARNING | wxOK);
-        is_msg_dlg_already_exist = true;
-        dialog.ShowModal();
-        apply(config, &new_conf);
-        is_msg_dlg_already_exist = false;
-    }
-}
 void ConfigManipulation::check_chamber_temperature(DynamicPrintConfig* config)
 {
     const static std::map<std::string, int>recommend_temp_map = {
@@ -232,28 +203,6 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
         is_msg_dlg_already_exist = true;
         dialog.ShowModal();
         new_conf.set_key_value("layer_height", new ConfigOptionFloat(0.2));
-        apply(config, &new_conf);
-        is_msg_dlg_already_exist = false;
-    }
-
-    //limit scarf start height
-    double seam_slope_start_height = config->option<ConfigOptionFloatOrPercent>("seam_slope_start_height")->get_abs_value(1);
-    bool   reset_slope_start_height = false;
-    if (config->option<ConfigOptionFloatOrPercent>("seam_slope_start_height")->percent) {
-        if (seam_slope_start_height >= 1)
-            reset_slope_start_height = true;
-    } else {
-        if (seam_slope_start_height >= config->opt_float("layer_height"))
-            reset_slope_start_height = true;
-    }
-
-    if (reset_slope_start_height) {
-        const wxString     msg_text = _(L("Should not large than layer height.\nReset to 10%"));
-        MessageDialog      dialog(nullptr, msg_text, "", wxICON_WARNING | wxOK);
-        DynamicPrintConfig new_conf = *config;
-        is_msg_dlg_already_exist    = true;
-        dialog.ShowModal();
-        new_conf.set_key_value("seam_slope_start_height", new ConfigOptionFloatOrPercent{10, true});
         apply(config, &new_conf);
         is_msg_dlg_already_exist = false;
     }
@@ -615,12 +564,9 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
 {
     bool have_perimeters = config->opt_int("wall_loops") > 0;
     for (auto el : { "ensure_vertical_shell_thickness", "detect_thin_wall", "detect_overhang_wall",
-                    "seam_position","seam_placement_away_from_overhangs","seam_gap","wipe_speed", "wall_sequence", "outer_wall_line_width",
+                    "seam_position","seam_gap","wipe_speed", "wall_sequence", "outer_wall_line_width",
                     "inner_wall_speed", "outer_wall_speed","small_perimeter_speed", "small_perimeter_threshold" })
         toggle_field(el, have_perimeters);
-
-    SeamPosition seam_pos = config->option<ConfigOptionEnum<SeamPosition>>("seam_position")->value;
-    toggle_line("seam_placement_away_from_overhangs", seam_pos == SeamPosition::spAligned || seam_pos == SeamPosition::spRear);
 
     bool have_infill = config->option<ConfigOptionPercent>("sparse_infill_density")->value > 0;
     // sparse_infill_filament uses the same logic as in Print::extruders()
@@ -635,7 +581,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     bool is_locked_zig = config->option<ConfigOptionEnum<InfillPattern>>("sparse_infill_pattern")->value == InfillPattern::ipLockedZag;
 
     toggle_line("infill_shift_step", is_cross_zag || is_locked_zig);
-    for (auto el : {"skeleton_infill_density", "skin_infill_density", "infill_lock_depth", "skin_infill_depth", "skin_infill_line_width", "skeleton_infill_line_width", "locked_skin_infill_pattern", "locked_skeleton_infill_pattern"})
+    for (auto el : { "skeleton_infill_density", "skin_infill_density", "infill_lock_depth", "skin_infill_depth","skin_infill_line_width", "skeleton_infill_line_width" })
         toggle_line(el, is_locked_zig);
 
     bool is_zig_zag = config->option<ConfigOptionEnum<InfillPattern>>("sparse_infill_pattern")->value == InfillPattern::ipZigZag;
@@ -780,10 +726,6 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     for (auto el : { "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"})
         toggle_line(el, has_overhang_speed, variant_index);
 
-    bool has_height_slowdown = config->opt_bool("enable_height_slowdown", variant_index);
-    for (auto el : { "slowdown_start_height", "slowdown_start_speed", "slowdown_start_acc", "slowdown_end_height", "slowdown_end_speed", "slowdown_end_acc" })
-        toggle_line(el, has_height_slowdown, variant_index);
-
     toggle_line("flush_into_objects", !is_global_config);
     toggle_line("print_flow_ratio", !is_global_config);
 
@@ -827,11 +769,6 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     toggle_field("xy_hole_compensation", !enable_auto_hole_and_contour_compensation);
     toggle_field("xy_contour_compensation", !enable_auto_hole_and_contour_compensation);
     toggle_line("circle_compensation_manual_offset", enable_auto_hole_and_contour_compensation);
-
-    // override filament scarf seam settings
-    bool override_filament_scarf_seam_settings = config->opt_bool("override_filament_scarf_seam_setting");
-    for (auto el : {"seam_slope_type", "seam_slope_start_height", "seam_slope_gap", "seam_slope_min_length"})
-        toggle_line(el, override_filament_scarf_seam_settings);
 }
 
 void ConfigManipulation::update_print_sla_config(DynamicPrintConfig* config, const bool is_global_config/* = false*/)

@@ -52,12 +52,6 @@ void StaticBox::SetCornerRadius(double radius)
     Refresh();
 }
 
-void StaticBox::SetBorderStyle(wxPenStyle style)
-{
-    border_style = style;
-    Refresh();
-}
-
 void StaticBox::SetBorderWidth(int width)
 {
     border_width = width;
@@ -203,7 +197,7 @@ void StaticBox::doRender(wxDC& dc)
                     rc.y += d;
                     rc.height -= d;
                 }
-                dc.SetPen(wxPen(border_color.colorForStates(states), border_width, border_style));
+                dc.SetPen(wxPen(border_color.colorForStates(states), border_width));
             } else {
                 dc.SetPen(wxPen(background_color.colorForStates(states)));
             }

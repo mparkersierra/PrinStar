@@ -32,7 +32,6 @@
 #include "Widgets/FilamentLoad.hpp"
 #include "Widgets/FanControl.hpp"
 #include "HMS.hpp"
-#include "PartSkipDialog.hpp"
 
 class StepIndicator;
 
@@ -255,15 +254,9 @@ class RectTextPanel : public wxPanel
 public:
     RectTextPanel(wxWindow *parent);
 
-public:
     void setText(const wxString text);
-    wxString getText() const { return text; }
 
-    void Rescale();
-
-protected:
     void OnPaint(wxPaintEvent &event);
-
 private:
     wxString text;
 };
@@ -277,7 +270,7 @@ public:
 
 
 private:
-    MachineObject*  m_obj{nullptr};
+    MachineObject*  m_obj;
     ScalableBitmap  m_thumbnail_placeholder;
     wxBitmap        m_thumbnail_bmp_display;
     ScalableBitmap  m_bitmap_use_time;
@@ -298,7 +291,7 @@ private:
     wxStaticText*   m_staticText_progress_percent;
     wxStaticText*   m_staticText_progress_percent_icon;
     wxStaticText*   m_staticText_progress_left;
-    Label*          m_staticText_finish_time;
+    wxStaticText*   m_staticText_finish_time;
     RectTextPanel*  m_staticText_finish_day;
     wxStaticText*   m_staticText_layers;
     wxStaticText *  m_has_rated_prompt;
@@ -309,7 +302,6 @@ private:
     wxStaticBitmap* m_bitmap_static_use_weight;
     ScalableButton* m_button_pause_resume;
     ScalableButton* m_button_abort;
-    Button*         m_button_partskip;
     Button*         m_button_market_scoring;
     Button*         m_button_clean;
     Button *                      m_button_market_retry;
@@ -320,10 +312,6 @@ private:
     int                           m_star_count;
     std::vector<ScalableButton *> m_score_star;
     bool                          m_star_count_dirty = false;
-
-    // partskip button
-    int m_part_skipped_count{ 0 };
-    int m_part_skipped_dirty{ 0 };
 
     ProgressBar*    m_gauge_progress;
     Label* m_error_text;
@@ -339,7 +327,6 @@ public:
     void msw_rescale();
 
 public:
-    void enable_partskip_button(MachineObject* obj, bool enable);
     void enable_pause_resume_button(bool enable, std::string type);
     void enable_abort_button(bool enable);
     void update_subtask_name(wxString name);
@@ -355,12 +342,13 @@ public:
     void set_thumbnail_img(const wxBitmap& bmp);
     void set_brightness_value(int value) { m_brightness_value = value; }
     void set_plate_index(int plate_idx = -1);
-    void market_scoring_show(bool show);
+    void market_scoring_show();
+    bool is_market_scoring_show();
+    void market_scoring_hide();
 
 public:
     ScalableButton* get_abort_button() {return m_button_abort;};
     ScalableButton* get_pause_resume_button() {return m_button_pause_resume;};
-    Button* get_partskip_button() { return m_button_partskip; };
     Button* get_market_scoring_button() {return m_button_market_scoring;};
     Button * get_market_retry_buttom() { return m_button_market_retry; };
     Button* get_clean_button() {return m_button_clean;};
@@ -371,10 +359,6 @@ public:
     std::vector<ScalableButton *> &get_score_star() { return m_score_star; }
     bool get_star_count_dirty() { return m_star_count_dirty; }
     void set_star_count_dirty(bool dirty) { m_star_count_dirty = dirty; }
-    int get_part_skipped_count() { return m_part_skipped_count; }
-    void set_part_skipped_count(int count) { m_part_skipped_count = count; }
-    int get_part_skipped_dirty() { return m_part_skipped_dirty; }
-    void set_part_skipped_dirty(int dirty) { m_part_skipped_dirty = dirty; }
     void                           set_has_reted_text(bool has_rated);
     void paint(wxPaintEvent&);
 };
@@ -456,7 +440,6 @@ protected:
     wxStaticText *  m_staticText_progress_left;
     wxStaticText *  m_staticText_layers;
     Button *        m_button_report;
-    Button *        m_button_partskip;
     ScalableButton *m_button_pause_resume;
     ScalableButton *m_button_abort;
     Button *        m_button_clean;
@@ -550,7 +533,6 @@ protected:
     StaticBox* m_filament_load_box;
 
     // Virtual event handlers, override them in your derived class
-    virtual void on_subtask_partskip(wxCommandEvent &event) { event.Skip(); }
     virtual void on_subtask_pause_resume(wxCommandEvent &event) { event.Skip(); }
     virtual void on_subtask_abort(wxCommandEvent &event) { event.Skip(); }
     virtual void on_lamp_switch(wxCommandEvent &event) { event.Skip(); }
@@ -632,7 +614,6 @@ protected:
     FanControlPopupNew* m_fan_control_popup{nullptr};
 
     ExtrusionCalibration *m_extrusion_cali_dlg{nullptr};
-    PartSkipDialog       *m_partskip_dlg{nullptr};
 
     wxString     m_request_url;
     bool         m_start_loading_thumbnail = false;
@@ -673,7 +654,6 @@ protected:
 
     void on_market_scoring(wxCommandEvent &event);
     void on_market_retry(wxCommandEvent &event);
-    void on_subtask_partskip(wxCommandEvent &event);
     void on_subtask_pause_resume(wxCommandEvent &event);
     void on_subtask_abort(wxCommandEvent &event);
     void on_print_error_clean(wxCommandEvent &event);
@@ -753,7 +733,6 @@ protected:
     void update_basic_print_data(bool def = false);
     void update_model_info();
     void update_subtask(MachineObject* obj);
-    void update_partskip_subtask(MachineObject *obj);
     void update_cloud_subtask(MachineObject *obj);
     void update_sdcard_subtask(MachineObject *obj);
     void update_temp_ctrl(MachineObject *obj);
@@ -772,9 +751,6 @@ protected:
     /* camera */
     void update_camera_state(MachineObject* obj);
     bool show_vcamera = false;
-
-    // partskip button
-    void update_partskip_button(MachineObject* obj);
 
 public:
     void update_error_message();

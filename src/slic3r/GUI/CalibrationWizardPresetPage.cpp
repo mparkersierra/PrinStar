@@ -4,7 +4,6 @@
 #include "Widgets/Label.hpp"
 #include "MsgDialog.hpp"
 #include "libslic3r/Print.hpp"
-#include "BBLUtil.hpp"
 
 #define CALIBRATION_LABEL_SIZE wxSize(FromDIP(150), FromDIP(24))
 #define SYNC_BUTTON_SIZE (wxSize(FromDIP(50), FromDIP(50)))
@@ -584,7 +583,7 @@ void CalibrationPresetPage::create_selection_panel(wxWindow* parent)
             return;
         }
         BOOST_LOG_TRIVIAL(info) << "CalibrationPresetPage: sync_nozzle_info - machine object status:"
-                                << " dev_id = " << BBLCrossTalk::Crosstalk_DevId(curr_obj->dev_id)
+                                << " dev_id = " << curr_obj->dev_id
                                 << ", print_type = " << curr_obj->printer_type
                                 << ", printer_status = " << curr_obj->print_status
                                 << ", cali_finished = " << curr_obj->cali_finished
@@ -984,17 +983,11 @@ NozzleVolumeType CalibrationPresetPage::get_nozzle_volume_type(int extruder_id) 
 
 ExtruderType CalibrationPresetPage::get_extruder_type(int extruder_id) const
 {
-    if (curr_obj) {
-        int extruder_idx = 0;
-        if (curr_obj->is_multi_extruders()) {
-            if (extruder_id == RIGHT_EXTRUDER_ID) {
-                extruder_idx = 1;
-            }
-        }
-        if (m_extrder_types.size() > extruder_idx)
-            return m_extrder_types[extruder_idx];
+    if (m_extrder_types.size() > extruder_id)
+        return ExtruderType(m_extrder_types[extruder_id]);
+    else {
+        return ExtruderType::etDirectDrive;
     }
-    return ExtruderType::etDirectDrive;
 }
 
 void CalibrationPresetPage::create_multi_extruder_filament_list_panel(wxWindow *parent)
@@ -1136,8 +1129,8 @@ void CalibrationPresetPage::create_multi_extruder_filament_list_panel(wxWindow *
     if (m_main_extruder_on_left) {
         m_main_sizer->GetStaticBox()->SetLabel(_L("Left Nozzle"));
         m_deputy_sizer->GetStaticBox()->SetLabel(_L("Right Nozzle"));
-        m_multi_exturder_ams_sizer->Add(m_main_sizer, 1, wxALL | wxALIGN_BOTTOM, 10);
-        m_multi_exturder_ams_sizer->Add(m_deputy_sizer, 1, wxALL | wxALIGN_BOTTOM, 10);
+        m_multi_exturder_ams_sizer->Add(m_main_sizer, 1, wxEXPAND | wxALL | wxALIGN_BOTTOM, 10);
+        m_multi_exturder_ams_sizer->Add(m_deputy_sizer, 1, wxEXPAND | wxALL | wxALIGN_BOTTOM, 10);
     }
     else {
         m_main_sizer->GetStaticBox()->SetLabel(_L("Right Nozzle"));
@@ -1226,8 +1219,7 @@ void CalibrationPresetPage::create_page(wxWindow* parent)
     m_top_sizer->Add(m_selection_panel, 0);
     m_top_sizer->Add(m_filament_list_panel, 0);
     m_top_sizer->Add(m_multi_exutrder_filament_list_panel, 0);
-    if (m_pa_cali_method_combox)
-        m_top_sizer->Add(m_pa_cali_method_combox, 0);
+    m_top_sizer->Add(m_pa_cali_method_combox, 0);
     m_top_sizer->Add(m_custom_range_panel, 0);
     m_top_sizer->AddSpacer(FromDIP(15));
     m_top_sizer->Add(m_warning_panel, 0);
@@ -1821,17 +1813,17 @@ void CalibrationPresetPage::update_show_status()
         return;
     }
 
-    //if (obj_->is_multi_extruders()) {
-    //    float diameter = obj_->m_extder_data.extders[0].current_nozzle_diameter;
-    //    bool  is_same_diameter = std::all_of(obj_->m_extder_data.extders.begin(), obj_->m_extder_data.extders.end(),
-    //       [diameter](const Extder& extruder) {
-    //            return std::fabs(extruder.current_nozzle_diameter - diameter) < EPSILON;
-    //       });
-    //    if (!is_same_diameter) {
-    //        show_status(CaliPresetPageStatus::CaliPresetStatusDifferentNozzleDiameters);
-    //        return;
-    //    }
-    //}
+    if (obj_->is_multi_extruders()) {
+        float diameter = obj_->m_extder_data.extders[0].current_nozzle_diameter;
+        bool  is_same_diameter = std::all_of(obj_->m_extder_data.extders.begin(), obj_->m_extder_data.extders.end(),
+           [diameter](const Extder& extruder) {
+                return std::fabs(extruder.current_nozzle_diameter - diameter) < EPSILON;
+           });
+        if (!is_same_diameter) {
+            show_status(CaliPresetPageStatus::CaliPresetStatusDifferentNozzleDiameters);
+            return;
+        }
+    }
 
     // check sdcard when if lan mode printer
     if (obj_->is_lan_mode_printer()) {

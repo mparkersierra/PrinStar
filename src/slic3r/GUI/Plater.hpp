@@ -38,7 +38,6 @@ class Button;
 
 namespace Slic3r {
 class BackgroundSlicingProcess;
-class HelioBackgroundProcess;
 class BuildVolume;
 class Model;
 class ModelObject;
@@ -50,7 +49,6 @@ class SLAPrint;
 //BBS: add partplatelist and SlicingStatusEvent
 class PartPlateList;
 class SlicingStatusEvent;
-class HelioCompletionEvent;
 enum SLAPrintObjectStep : unsigned int;
 enum class ConversionType : int;
 class Ams;
@@ -108,7 +106,6 @@ wxDECLARE_EVENT(EVT_INSTALL_PLUGIN_HINT,        wxCommandEvent);
 wxDECLARE_EVENT(EVT_UPDATE_PLUGINS_WHEN_LAUNCH,        wxCommandEvent);
 wxDECLARE_EVENT(EVT_PREVIEW_ONLY_MODE_HINT,        wxCommandEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_COLOR_MODE_CHANGED,   SimpleEvent);
-wxDECLARE_EVENT(EVT_ENABLE_GCODE_OPTION_ITEM_CHANGED, SimpleEvent);
 wxDECLARE_EVENT(EVT_PRINT_FROM_SDCARD_VIEW,   SimpleEvent);
 wxDECLARE_EVENT(EVT_CREATE_FILAMENT, SimpleEvent);
 wxDECLARE_EVENT(EVT_MODIFY_FILAMENT, SimpleEvent);
@@ -118,12 +115,6 @@ wxDECLARE_EVENT(EVT_NOTICE_CHILDE_SIZE_CHANGED, SimpleEvent);
 wxDECLARE_EVENT(EVT_NOTICE_FULL_SCREEN_CHANGED, IntEvent);
 using ColorEvent = Event<wxColour>;
 wxDECLARE_EVENT(EVT_ADD_CUSTOM_FILAMENT, ColorEvent);
-
-wxDECLARE_EVENT(EVT_HELIO_PROCESSING_COMPLETED, HelioCompletionEvent);
-wxDECLARE_EVENT(EVT_HELIO_PROCESSING_STARTED, SimpleEvent);
-wxDECLARE_EVENT(EVT_HELIO_INPUT_CHAMBER_TEMP, SimpleEvent);
-wxDECLARE_EVENT(EVT_GCODE_VIEWER_CHANGED, SimpleEvent);
-
 const wxString DEFAULT_PROJECT_NAME = "Untitled";
 
 class Sidebar : public wxPanel
@@ -341,10 +332,6 @@ public:
     void calib_retraction(const Calib_Params &params);
     void calib_VFA(const Calib_Params &params);
 
-    // for helio slice
-    void update_helio_background_process(std::string& printer_id, std::string& material_id);
-    std::vector<std::string> get_current_filaments_preset_names();
-
     //BBS: add only gcode mode
     bool is_gcode_3mf() { return m_exported_file; }
     bool only_gcode_mode() { return m_only_gcode; }
@@ -364,10 +351,7 @@ public:
     void invalid_all_plate_thumbnails();
     void force_update_all_plate_thumbnails();
 
-    const VendorProfile::PrinterModel * get_curr_printer_model();
-    std::map<std::string, std::string> get_bed_texture_maps();
-    int                                get_right_icon_offset_bed();
-    bool                               get_enable_wrapping_detection();
+    const VendorProfile::PrinterModel *get_curr_printer_model();
 
     static wxColour get_next_color_for_filament();
     static wxString get_slice_warning_string(GCodeProcessorResult::SliceWarning& warning);
@@ -381,9 +365,6 @@ public:
     bool load_svg(const wxArrayString &filenames, bool from_toolbar_or_file_menu = false);
     bool load_same_type_files(const wxArrayString &filenames);
     bool load_files(const wxArrayString& filenames);
-    void statistics_burial_data_once(std::string json_str);//Upload to the cloud immediately
-    void statistics_burial_data(std::string file_path);
-    void statistics_burial_data_form_mw();
     const wxString& get_last_loaded_gcode() const { return m_last_loaded_gcode; }
 
     void update(bool conside_update_flag = false, bool force_background_processing_update = false);
@@ -480,7 +461,6 @@ public:
     void reslice_SLA_until_step(SLAPrintObjectStep step, const ModelObject &object, bool postpone_error_messages = false);
 
     void clear_before_change_mesh(int obj_idx);
-    void clear_before_change_mesh(int obj_idx, int vol_idx);
     void changed_mesh(int obj_idx);
 
     void changed_object(ModelObject &object);
@@ -540,8 +520,6 @@ public:
     // On activating the parent window.
     void on_activate();
     std::vector<std::string> get_extruder_colors_from_plater_config(const GCodeProcessorResult* const result = nullptr) const;
-    std::vector<std::string> get_filament_colors_render_info() const;
-    std::vector<std::string> get_filament_color_render_type() const;
     std::vector<std::string> get_colors_for_color_print(const GCodeProcessorResult* const result = nullptr) const;
 
     void set_global_filament_map_mode(FilamentMapMode mode);
@@ -698,10 +676,6 @@ public:
     //BBS: show object info
     void show_object_info();
     void show_assembly_info();
-
-    //BBS Helio slice
-    int  get_helio_process_status() const;
-
     //BBS
     bool show_publish_dialog(bool show = true);
     //BBS: post process string object exception strings by warning types
@@ -843,8 +817,6 @@ public:
 
     void toggle_non_manifold_edges();
     bool is_show_non_manifold_edges();
-    void toggle_text_cs();
-    bool is_show_text_cs();
     void toggle_show_wireframe();
     bool is_show_wireframe() const;
     void enable_wireframe(bool status);
@@ -863,7 +835,6 @@ public:
     wxMenu* plate_menu();
     wxMenu* object_menu();
     wxMenu* part_menu();
-    wxMenu* text_part_menu();
     wxMenu* svg_part_menu();
     wxMenu* cut_connector_menu();
     wxMenu* sla_object_menu();
@@ -890,10 +861,6 @@ public:
     std::atomic<bool> m_arrange_running{false};
     void              reset_check_status() { m_check_status = 0; }
 
-    void mark_plate_toolbar_image_dirty();
-    bool is_plate_toolbar_image_dirty() const;
-    void clear_plate_toolbar_image_dirty();
-
 private:
     struct priv;
     std::unique_ptr<priv> p;
@@ -913,7 +880,6 @@ private:
     std::string m_preview_only_filename;
     int m_valid_plates_count { 0 };
     int m_check_status = 0; // 0 not check, 1 check success, 2 check failed
-    bool m_b_plate_toolbar_image_dirty{ true };
 
     void suppress_snapshots();
     void allow_snapshots();
@@ -943,7 +909,7 @@ private:
 std::vector<int> get_min_flush_volumes(const DynamicPrintConfig &full_config, size_t nozzle_id);
 std::string      check_boolean_possible(const std::vector<const ModelVolume *> &volumes, csg::BooleanFailReason& fail_reason);
 
-Preset *get_printer_preset(const MachineObject *obj);
+Preset *get_printer_preset(MachineObject *obj);
 wxArrayString get_all_camera_view_type();
 
 

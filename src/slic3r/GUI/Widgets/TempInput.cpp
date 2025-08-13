@@ -236,14 +236,14 @@ void TempInput::Warning(bool warn, WarningType type)
     if (warning_mode) {
         if (wdialog == nullptr) {
             wdialog = new PopupWindow(this);
-            wdialog->SetBackgroundColour(wxColour("#FFFFFF"));
+            wdialog->SetBackgroundColour(wxColour(0xFFFFFF));
 
             wdialog->SetSizeHints(wxDefaultSize, wxDefaultSize);
 
             wxBoxSizer *sizer_body = new wxBoxSizer(wxVERTICAL);
 
             auto body = new wxPanel(wdialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
-            body->SetBackgroundColour(wxColour("#FFFFFF"));
+            body->SetBackgroundColour(wxColour(0xFFFFFF));
 
 
             wxBoxSizer *sizer_text;
@@ -329,7 +329,6 @@ void TempInput::SetLabelColor(StateColor const &color)
 void TempInput::Rescale()
 {
     if (this->normal_icon.bmp().IsOk()) this->normal_icon.msw_rescale();
-    if (this->actice_icon.bmp().IsOk()) this->actice_icon.msw_rescale();
     if (this->degree_icon.bmp().IsOk()) this->degree_icon.msw_rescale();
     if (this->round_scale_hint_icon.bmp().IsOk()) this->round_scale_hint_icon.msw_rescale();
     messureSize();

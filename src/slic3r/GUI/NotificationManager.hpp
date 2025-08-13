@@ -76,8 +76,6 @@ enum class NotificationType
 	// thread thowing a SlicingError exception.
 	SlicingError,
 	//Gcode conflict generates slicing severe warning
-    HelioSlicingError,
-    // Gcode conflict generates slicing severe warning
     SlicingSeriousWarning,
 	// Slicing warnings, issued by the slicing process.
 	// Slicing warnings are registered for a particular Print milestone or a PrintObject and its milestone.
@@ -156,7 +154,6 @@ enum class NotificationType
     BBLSliceMultiExtruderHeightOutside,
 	BBLBedFilamentIncompatible,
     BBLMixUsePLAAndPETG,
-	BBLNozzleFilamentIncompatible,
     AssemblyWarning,
     AssemblyInfo,
     NotificationTypeCount
@@ -219,8 +216,7 @@ public:
     void close_slicing_serious_warning_notification(const std::string &text);
 	// Creates Slicing Error notification with a custom text and no fade out.
     void push_slicing_error_notification(const std::string &text, std::vector<ModelObject const *> objs);
-    void push_helio_error_notification(const std::string &text);
-    // Creates Slicing Warning notification with a custom text and no fade out.
+	// Creates Slicing Warning notification with a custom text and no fade out.
     void push_slicing_warning_notification(const std::string &text, bool gray, ModelObject const *obj, ObjectID oid, int warning_step, int warning_msg_id, NotificationLevel level = NotificationLevel::WarningNotificationLevel);
 	// marks slicing errors as gray
 	void set_all_slicing_errors_gray(bool g);

@@ -7,7 +7,6 @@
 #include "Tabbook.hpp"
 #include "CaliHistoryDialog.hpp"
 #include "CalibUtils.hpp"
-#include "BBLUtil.hpp"
 
 namespace Slic3r { namespace GUI {
 
@@ -17,6 +16,7 @@ wxDEFINE_EVENT(EVT_DEVICE_CHANGED, wxCommandEvent);
 wxDEFINE_EVENT(EVT_CALIBRATION_JOB_FINISHED, wxCommandEvent);
 
 static const wxString NA_STR = _L("N/A");
+static const float MIN_PA_K_VALUE_STEP = 0.001;
 static const int MAX_PA_HISTORY_RESULTS_NUMS = 16;
 
 std::map<int, Preset*> get_cached_selected_filament(MachineObject* obj) {
@@ -60,11 +60,23 @@ std::map<int, TrayInfo> get_cached_selected_filament_for_multi_extruder(MachineO
     return selected_filament_map;
 }
 
+bool is_pa_params_valid(const Calib_Params& params)
+{
+    if (params.start < MIN_PA_K_VALUE || params.end > MAX_PA_K_VALUE || params.step < EPSILON || params.end < params.start + params.step) {
+        MessageDialog msg_dlg(nullptr,
+            wxString::Format(_L("Please input valid values:\nStart value: >= %.1f\nEnd value: <= %.1f\nEnd value: > Start value\nValue step: >= %.3f)"), MIN_PA_K_VALUE, MAX_PA_K_VALUE, MIN_PA_K_VALUE_STEP),
+            wxEmptyString, wxICON_WARNING | wxOK);
+        msg_dlg.ShowModal();
+        return false;
+    }
+    return true;
+}
+
 CalibrationWizard::CalibrationWizard(wxWindow* parent, CalibMode mode, wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
     : wxPanel(parent, id, pos, size, style)
     , m_mode(mode)
 {
-    SetBackgroundColour(wxColour("#EEEEEE"));
+    SetBackgroundColour(wxColour(0xEEEEEE));
 
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
@@ -173,7 +185,7 @@ void CalibrationWizard::on_device_connected(MachineObject* obj)
     recover_preset_info(obj);
 
     BOOST_LOG_TRIVIAL(info) << "on_device_connected - machine object status:"
-                            << " dev_id = " << BBLCrossTalk::Crosstalk_DevId(obj->dev_id)
+                            << " dev_id = " << obj->dev_id
                             << ", print_type = " << obj->printer_type
                             << ", printer_status = " << obj->print_status
                             << ", cali_finished = " << obj->cali_finished

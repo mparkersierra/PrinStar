@@ -29,8 +29,8 @@
         "nil"
     ],
     "filament_max_volumetric_speed": [
-        "20",
-        "30"
+        "16",
+        "16"
     ],
     "filament_ramming_volumetric_speed": [
         "-1",
@@ -53,8 +53,8 @@
         "nil"
     ],
     "filament_retraction_length": [
-        "0.4",
-        "0.4"
+        "nil",
+        "nil"
     ],
     "filament_retraction_minimum_travel": [
         "nil",
@@ -65,20 +65,20 @@
         "nil"
     ],
     "filament_wipe": [
-        "1",
-        "1"
+        "nil",
+        "nil"
     ],
     "filament_wipe_distance": [
-        "1",
-        "1"
+        "nil",
+        "nil"
     ],
     "filament_z_hop": [
         "nil",
         "nil"
     ],
     "filament_z_hop_types": [
-        "Spiral Lift",
-        "Spiral Lift"
+        "nil",
+        "nil"
     ],
     "filament_extruder_variant": [
         "Direct Drive Standard",
@@ -109,7 +109,8 @@
         "10"
     ],
     "compatible_printers": [
-        "Bambu Lab H2D 0.4 nozzle"
+        "Bambu Lab H2D 0.4 nozzle",
+        "Bambu Lab H2D 0.6 nozzle"
     ],
     "filament_start_gcode": [
         "; filament start gcode\n"

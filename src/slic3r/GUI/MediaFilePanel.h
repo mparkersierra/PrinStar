@@ -36,7 +36,7 @@ public:
     
     ~MediaFilePanel();
 
-    void UpdateByObj(MachineObject * obj);
+    void SetMachineObject(MachineObject * obj);
 
     void SwitchStorage(bool external);
 

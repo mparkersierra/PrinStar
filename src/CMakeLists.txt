@@ -113,6 +113,16 @@ else ()
     add_executable(BambuStudio BambuStudio.cpp BambuStudio.hpp)
 endif ()
 
+if(APPLE)
+  set_target_properties(BambuStudio PROPERTIES
+    MACOSX_BUNDLE TRUE
+    OUTPUT_NAME "PrinStar"                # => PrinStar.app
+    MACOSX_BUNDLE_BUNDLE_NAME "PrinStar"
+    MACOSX_BUNDLE_ICON_FILE "Icon.icns"   # optional
+  )
+endif()
+
+
 if (MINGW)
     target_link_options(BambuStudio PUBLIC "-Wl,-allow-multiple-definition")
     set_target_properties(BambuStudio PROPERTIES PREFIX "")
@@ -248,9 +258,9 @@ else ()
         set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/../resources")
     endif ()
     if (CMAKE_MACOSX_BUNDLE)
-        set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/${BIN_CONF_DIR}/BambuStudio.app/Contents/Resources")
+        set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/${BIN_CONF_DIR}/PrinStar.app/Contents/Resources")
         set(MACOSX_BUNDLE_ICON_FILE Icon.icns)
-        set(MACOSX_BUNDLE_BUNDLE_NAME "Bambu Studio")
+        set(MACOSX_BUNDLE_BUNDLE_NAME "PrinStar")
         set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${SLIC3R_VERSION})
         set(MACOSX_BUNDLE_COPYRIGHT "Copyright(C) 2021-2023 Lunkuo All Rights Reserved")
     endif()

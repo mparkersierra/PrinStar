@@ -439,7 +439,7 @@ find_package(TBB REQUIRED)
 
 find_package(OpenSSL REQUIRED)
 if (APPLE)
-find_package(CURL CONFIG REQUIRED)
+find_package(CURL REQUIRED)
 else()
 find_package(CURL REQUIRED)
 endif()

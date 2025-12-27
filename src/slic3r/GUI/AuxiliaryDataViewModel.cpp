@@ -333,11 +333,18 @@ wxDataViewItemArray AuxiliaryModel::ImportFile(AuxiliaryModelNode* sel, wxArrayS
         wxString dir_path = m_root_dir;
         if (sel != m_root)
             dir_path += "\\" + sel->name;
-        dir_path += "\\" + src_bfs_path.filename().generic_wstring();
+        dir_path += "\\" + wxString(src_bfs_path.filename().wstring());
 
         boost::system::error_code ec;
-        if (!fs::copy_file(src_bfs_path, fs::path(dir_path.ToStdWstring()), fs::copy_option::overwrite_if_exists, ec))
+        if (!fs::copy_file(
+                src_bfs_path,
+                fs::path(dir_path.ToStdWstring()),
+                fs::copy_options::overwrite_existing,
+                ec))
+        {
             continue;
+        }
+
 
         // Update model data
         AuxiliaryModelNode* file = new AuxiliaryModelNode(parent, dir_path, false);

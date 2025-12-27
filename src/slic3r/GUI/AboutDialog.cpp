@@ -296,16 +296,21 @@ AboutDialog::AboutDialog()
         staticText->SetMinSize(wxSize(FromDIP(520), -1));
         staticText->SetFont(Label::Body_12);
         if (is_zh) {
-            wxString find_txt = "";
-            wxString count_txt = "";
-            for (auto  o = 0; o < text_list[i].length(); o++) {
+            wxString find_txt;
+            wxString count_txt;
+            for (size_t o = 0; o < text_list[i].length(); ++o) {
+                // Append next character to the counting string and measure
+                count_txt += text_list[i][o];
                 auto size = staticText->GetTextExtent(count_txt);
-                if (size.x < FromDIP(506)) {
+                if (size.x <= FromDIP(506)) {
+                    // Within width, mirror append to output
                     find_txt += text_list[i][o];
-                    count_txt += text_list[i][o];
                 } else {
-                    find_txt += std::string("\n") + text_list[i][o];
-                    count_txt = text_list[i][o];
+                    // Exceeded width: insert a newline, reset counting buffer to current char
+                    find_txt += "\n";
+                    find_txt += text_list[i][o];
+                    count_txt.clear();
+                    count_txt += text_list[i][o];
                 }
             }
             staticText->SetLabel(find_txt);

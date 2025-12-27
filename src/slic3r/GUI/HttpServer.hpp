@@ -133,8 +133,8 @@ class session
 public:
     boost::asio::ip::tcp::socket socket;
 
-    session(io_service& io_service)
-        :socket(io_service)
+    session(boost::asio::io_context& io_context)
+        : socket(io_context)
     {
     }
 

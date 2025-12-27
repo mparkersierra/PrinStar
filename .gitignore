@@ -31,3 +31,5 @@ doc/
 test.js
 /.cache/
 .clangd
+
+BuildCommands.md

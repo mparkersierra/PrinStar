@@ -346,11 +346,11 @@ void AuFile::on_input_enter(wxCommandEvent &evt)
     }
 
     auto     existing  = false;
-    auto     dir       = m_file_path.branch_path();
+    auto     dir       = m_file_path.parent_path();
     auto     new_fullname = new_file_name + m_file_path.extension().string();
 
     
-    wxString new_fullname_path = dir.wstring() + "/" + new_fullname;
+    wxString new_fullname_path = wxString(dir.wstring()) + "/" + new_fullname;
     fs::path new_dir_path(new_fullname_path.c_str());
     
 
@@ -462,8 +462,8 @@ void AuFile::on_set_cover()
     wxGetApp().plater()->model().model_info->cover_file = path.string();
     //wxGetApp().plater()->model().model_info->cover_file = m_file_name.ToStdString();
 
-    auto full_path          = m_file_path.branch_path();
-    auto full_root_path         = full_path.branch_path();
+    auto full_path          = m_file_path.parent_path();
+    auto full_root_path     = full_path.parent_path();
     auto full_root_path_str = encode_path(full_root_path.string().c_str());
     auto dir       = wxString::Format("%s/.thumbnails", full_root_path_str);
 
@@ -507,8 +507,8 @@ void AuFile::on_set_delete()
     auto     is_fine = fs::remove(bfs_path);
 
     if (m_cover) {
-        auto full_path          = m_file_path.branch_path();
-        auto full_root_path     = full_path.branch_path();
+        auto full_path          = m_file_path.parent_path();
+        auto full_root_path     = full_path.parent_path();
         auto full_root_path_str = encode_path(full_root_path.string().c_str());
         auto dir                = wxString::Format("%s/.thumbnails", full_root_path_str);
         fs::path dir_path(dir.c_str());
@@ -1231,3 +1231,4 @@ void DesignerPanel::msw_rescale()
 }
 
 }} // namespace Slic3r::GUI
+

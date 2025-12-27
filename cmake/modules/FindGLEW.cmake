@@ -62,11 +62,28 @@ This module defines the following variables:
 
 #]=======================================================================]
 
-include(FindPackageHandleStandardArgs)
+# Homebrew GLEW CONFIG is broken on macOS — skip it
+if(NOT APPLE)
+  find_package(GLEW CONFIG QUIET)
+endif()
 
-find_package(GLEW CONFIG QUIET)
+if(APPLE)
+  set(GLEW_USE_STATIC_LIBS OFF)
+endif()
+
+
 
 if(GLEW_FOUND)
+
+  # --- Workaround for Homebrew GLEW on macOS ---
+  if(NOT TARGET GLEW::glew_s AND TARGET GLEW::GLEW)
+    add_library(GLEW::glew_s INTERFACE IMPORTED)
+    set_target_properties(GLEW::glew_s PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${GLEW_INCLUDE_DIRS}"
+      INTERFACE_LINK_LIBRARIES "GLEW::GLEW"
+    )
+  endif()
+
   find_package_handle_standard_args(GLEW DEFAULT_MSG GLEW_CONFIG)
   return()
 endif()
@@ -174,10 +191,19 @@ include(SelectLibraryConfigurations)
 select_library_configurations(GLEW_SHARED)
 select_library_configurations(GLEW_STATIC)
 
-if(NOT GLEW_USE_STATIC_LIBS)
-  set(GLEW_LIBRARIES ${GLEW_SHARED_LIBRARY})
+if(GLEW_USE_STATIC_LIBS)
+  if(GLEW_STATIC_LIBRARY)
+    set(GLEW_LIBRARIES ${GLEW_STATIC_LIBRARY})
+  elseif(GLEW_SHARED_LIBRARY)
+    message(WARNING "GLEW static requested but not found; falling back to shared library")
+    set(GLEW_LIBRARIES ${GLEW_SHARED_LIBRARY})
+  endif()
 else()
-  set(GLEW_LIBRARIES ${GLEW_STATIC_LIBRARY})
+  if(GLEW_SHARED_LIBRARY)
+    set(GLEW_LIBRARIES ${GLEW_SHARED_LIBRARY})
+  elseif(GLEW_STATIC_LIBRARY)
+    set(GLEW_LIBRARIES ${GLEW_STATIC_LIBRARY})
+  endif()
 endif()
 
 

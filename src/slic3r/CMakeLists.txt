@@ -234,8 +234,6 @@ set(SLIC3R_GUI_SOURCES
     GUI/GUI_ObjectList.hpp
     GUI/GUI_ObjectLayers.cpp
     GUI/GUI_ObjectLayers.hpp
-    GUI/GUI_AuxiliaryList.cpp
-    GUI/GUI_AuxiliaryList.hpp
     GUI/GUI_ObjectSettings.cpp
     GUI/GUI_ObjectSettings.hpp
     GUI/GUI_ObjectTable.cpp
@@ -521,12 +519,8 @@ set(SLIC3R_GUI_SOURCES
     GUI/MultiMachine.cpp
     GUI/MultiMachinePage.hpp
     GUI/MultiMachinePage.cpp
-    GUI/MultiMachineManagerPage.cpp
     GUI/MultiMachineManagerPage.hpp
-    GUI/MultiPrintJob.cpp
-    GUI/MultiPrintJob.hpp
-    GUI/MultiSendMachineModel.hpp
-    GUI/MultiSendMachineModel.cpp
+    GUI/MultiMachineManagerPage.cpp
     GUI/MultiTaskManagerPage.hpp
     GUI/MultiTaskManagerPage.cpp
     GUI/MultiTaskModel.hpp
@@ -714,3 +708,38 @@ endif ()
 
 # Add a definition so that we can tell we are compiling slic3r.
 target_compile_definitions(libslic3r_gui PRIVATE SLIC3R_CURRENTLY_COMPILING_GUI_MODULE)
+
+# — Link Intel TBB for those tbb::detail symbols
+find_package(TBB REQUIRED)
+target_link_libraries(libslic3r_gui
+  TBB::tbb
+)
+
+# — Make sure we link Boost.Process v2 (provides get_shell_category, error categories, etc.)
+find_package(Boost REQUIRED COMPONENTS process)
+target_link_libraries(libslic3r_gui
+  ${Boost_LIBRARIES}
+)
+
+# === OpenCV: prefer system install, fallback to dep folder ===
+# Try system OpenCV 4 first (needs at least core and imgproc for ObjColorUtils.hpp)
+find_package(OpenCV 4 QUIET COMPONENTS core imgproc)
+
+# If not found, try a vendored deps folder: set DEPS_DIR to the root containing include/opencv4 and lib/
+if(NOT OpenCV_FOUND)
+    set(DEPS_DIR "${CMAKE_SOURCE_DIR}/deps" CACHE PATH "Path to deps folder containing OpenCV (include/opencv4 and lib/)")
+    if(EXISTS "${DEPS_DIR}/include/opencv4")
+        set(OpenCV_INCLUDE_DIRS "${DEPS_DIR}/include/opencv4")
+        # Link by component names; target_link_directories provides the actual lib path.
+        set(OpenCV_LIBS opencv_core opencv_imgproc)
+        target_link_directories(libslic3r_gui PRIVATE "${DEPS_DIR}/lib")
+        set(OpenCV_FOUND TRUE)
+    endif()
+endif()
+
+if(OpenCV_FOUND)
+    target_include_directories(libslic3r_gui PRIVATE ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(libslic3r_gui PRIVATE ${OpenCV_LIBS})
+else()
+    message(FATAL_ERROR "OpenCV not found. Install OpenCV 4 (core,imgproc) or set DEPS_DIR to your dep folder containing OpenCV headers (include/opencv4) and libs (lib/).")
+endif()

@@ -14,7 +14,6 @@
 #endif
 #include <wx/uri.h>
 #if defined(__WIN32__) || defined(__WXMAC__)
-#include "wx/private/jsscriptwrapper.h"
 #endif
 
 #ifdef __WIN32__

@@ -1,4 +1,4 @@
-#
+# cmake ../ -DDESTDIR="/Users/martinparker/PrinterThingy/BambuStudio_dep" -DOPENSSL_ARCH="darwin64-arm64-cc"
 # This CMake project downloads, configures and builds BambuStudio dependencies on Unix and Windows.
 #
 # When using this script, it's recommended to perform an out-of-source build using CMake.
